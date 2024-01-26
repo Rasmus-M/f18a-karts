@@ -1,0 +1,304 @@
+*********************************************************************
+*
+* Mode 7 demo
+* For the TI-99/4A home computer
+*
+* January 2024 -
+* Rasmus Moustgaard <rasmus.moustgaard@gmail.com>
+*
+
+       copy "macros.a99"
+
+**
+* Constants
+*
+screen_width_char:
+       equ  32
+screen_height_char:
+       equ  24
+screen_size_char:
+       equ  screen_width_char*screen_height_char
+screen_width:
+       equ  screen_width_char*8
+screen_height:
+       equ  screen_height_char*8
+
+**
+* Memory mapped addresses
+*
+vdpwd:                                 ; VDP write data
+       equ  >8c00
+vdpwa:                                 ; VDP set read/write address
+       equ  >8c02
+vdprd:                                 ; VDP read data
+       equ  >8800
+vdpsta:                                ; VDP status
+       equ  >8802
+sound:                                 ; Sound
+       equ  >8400
+spchwt:
+       equ  >9400
+spchrd:
+       equ  >9000
+
+
+**
+* VDP memory map
+*
+pattern_table:                         ; Pattern table x 4
+       equ  >0000
+sprite_pattern_table:                  ; Sprite pattern table
+       equ  >2000
+name_table:                            ; Name table x 2
+       equ  >2800
+sprite_attr_table:                     ; Sprite attribute table x 2
+       equ  >2b00
+color_table:                           ; Color table
+       equ  >2f00
+
+**
+* Scratch pad
+*
+pad:
+       equ  >8300
+wrksp:
+       equ  pad                        ; Workspace
+lsb_r0:
+       equ  wrksp+1
+r1lb:
+       equ  wrksp+3
+r2lb:
+       equ  wrksp+5
+r3lb:
+       equ  wrksp+7
+wrksp2:
+       equ  wrksp+>20
+stack:
+       equ  wrksp2+>20
+**
+* PAD constants
+*
+padcon:
+       equ  stack+>16                  ; Start of pad constants
+one:
+       equ  padcon
+**
+* PAD variables
+*
+padvar:                                ; Start of pad variables
+       equ  one+2
+frame:
+       equ padvar
+vdp_copy_pad:
+       equ  frame+2
+pad_max:
+       equ  vdp_copy_pad+22
+
+********************************************************************************
+*
+* Main program
+*
+       aorg >2000
+main:
+       limi 0                          ; Interrupts off
+       lwpi wrksp                      ; Setup workspace
+       li   r10,stack                  ; Setup stack pointer
+       li   r15,vdpwd
+       bl   @one_time_init
+loop:
+       jmp  loop
+
+*********************************************************************************
+*
+* One time initializations
+*
+one_time_init:
+       .proc
+       li   r0,1
+       mov  r0,@one
+       bl   @clear_pad
+       bl   @copy_vdp_copy_to_pad
+       bl   @graphics_mode
+       bl   @init_vdp_ram
+       .endproc
+*// one_time_init
+
+*********************************************************************************
+*
+* Clear PAD
+*
+clear_pad:
+       li   r1,padvar
+       li   r2,pad_max-padvar
+clear_pad_1:
+       clr  *r1+
+       dect r2
+       jne  clear_pad_1
+       rt
+*// clear_pad
+
+*********************************************************************************
+*
+* Copy VDP copy to PAD
+*
+copy_vdp_copy_to_pad:
+       li   r0,vdp_copy
+       li   r1,vdp_copy_pad
+       li   r2,vdp_copy_end-vdp_copy
+copy_vdp_copy_to_pad_1:
+       mov  *r0+,*r1+
+       dect r2
+       jne copy_vdp_copy_to_pad_1
+       rt
+*// copy_vdp_copy_to_pad
+
+*********************************************************************************
+*
+* Set graphics mode
+*
+graphics_mode:
+       .proc
+       li   r1,vregs2
+graphics_mode_1:
+       mov  *r1+,r0
+       jlt  graphics_mode_2
+       bl   @vwtr                      ; Set register
+       jmp  graphics_mode_1
+*      Return
+graphics_mode_2:
+       .endproc
+*      VDP registers
+vregs2:
+       byte >39,>1c                        ; Unlock F18A
+       byte >39,>1c                        ; Unlock F18A
+       byte >1e,>04                        ; F18A: Max 4 sprites on a scanline
+       byte >00,>00                        ; Graphics I mode
+       byte >01,>e2                        ; 16K, display on, interrupts enabled
+       byte >02,name_table/>400            ; Name table
+       byte >03,color_table/>40            ; Color table
+       byte >04,pattern_table/>800         ; Pattern table
+       byte >05,sprite_attr_table/>80      ; Sprite attribute table
+       byte >06,sprite_pattern_table/>800  ; Sprite pattern table
+       byte >07,>01                        ; Backdrop color
+       data -1
+*// graphics_mode
+
+*********************************************************************************
+*
+* Initialize VDP RAM
+*
+init_vdp_ram:
+       .proc
+       clr  r0
+       clr  r1
+       li   r2,>4000
+       bl   @vsmw
+       .endproc
+*// init_vdp_ram
+
+***************************************************************************
+*
+* Check key
+*
+* r0: Column in MSB: >0000 - >0700, Row in LSB: >0006 - >0014
+*
+*       Column   0      1    2    3    4    5     6       7
+*     Row
+*     >0006      =      .    ,    M    N    /    Fire    Fire
+*     >0008    Space    L    K    J    H    ;    Left    Left
+*     >000A    Enter    O    I    U    Y    P    Right   Right
+*     >000C             9    8    7    6    0    Down    Down
+*     >000E    Fctn     2    3    4    5    1    Up      Up
+*     >0010    Shift    S    D    F    G    A
+*     >0012    Ctrl     W    E    R    T    Q
+*     >0014             X    C    V    B    Z
+*
+* On return NEQ means that the key is pressed
+*
+KEY_FI EQU  >0606
+KEY_LF EQU  >0608
+KEY_RG EQU  >060A
+KEY_DN EQU  >060C
+KEY_UP EQU  >060E
+KEY_CM EQU  >0206
+KEY_FS EQU  >0106
+KEY_0  EQU  >050C
+KEY_1  EQU  >050E
+KEY_2  EQU  >010E
+KEY_3  EQU  >020E
+KEY_4  EQU  >030E
+KEY_5  EQU  >040E
+KEY_6  EQU  >040C
+KEY_7  EQU  >030C
+KEY_8  EQU  >020C
+KEY_9  EQU  >010C
+KEY_A  EQU  >0510
+KEY_B  EQU  >0414
+KEY_C  EQU  >0214
+KEY_D  EQU  >0210
+KEY_E  EQU  >0212
+KEY_F  EQU  >0310
+KEY_G  EQU  >0410
+KEY_H  EQU  >0408
+KEY_I  EQU  >020A
+KEY_J  EQU  >0308
+KEY_K  EQU  >0208
+KEY_L  EQU  >0108
+KEY_M  EQU  >0306
+KEY_N  EQU  >0406
+KEY_O  EQU  >010A
+KEY_P  EQU  >050A
+KEY_Q  EQU  >0512
+KEY_R  EQU  >0312
+KEY_S  EQU  >0110
+KEY_T  EQU  >0412
+KEY_U  EQU  >030A
+KEY_V  EQU  >0314
+KEY_W  EQU  >0112
+KEY_X  EQU  >0114
+KEY_Y  EQU  >040A
+KEY_Z  EQU  >0514
+KEY_SP EQU  >0008
+KEY_EN EQU  >000A
+KEY_FN EQU  >000E
+KEY_SH EQU  >0010
+KEY_CT EQU  >0012
+JOY_FI EQU  >0606
+JOY_LT EQU  >0608
+JOY_RT EQU  >060A
+JOY_DN EQU  >060C
+JOY_UP EQU  >060E
+*
+check_key:
+       li   r12,>0024                  ; CRU address of the column decoder
+       ldcr r0,3                       ; Select column
+       andi r0,>00ff
+       mov  r0,r12                     ; Select row
+       tb   0                          ; Test key, EQ if not pressed
+       rt
+*// check_key
+
+***************************************************************************
+*
+* Program includes
+*
+       copy "vdp.a99"
+
+lower_memory_max:
+       equ  $
+
+***************************************************************************
+*
+* Data
+*
+       aorg >a000
+
+***************************************************************************
+*
+* Data includes
+*
+
+upper_memory_max:
+       equ  $
+
+       end
