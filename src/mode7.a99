@@ -22,6 +22,10 @@ screen_width:
        equ  screen_width_char*8
 screen_height:
        equ  screen_height_char*8
+n_patterns:
+       equ  110
+n_meta_tiles:
+       equ  17
 
 **
 * Memory mapped addresses
@@ -45,16 +49,20 @@ spchrd:
 **
 * VDP memory map
 *
-pattern_table:                         ; Pattern table x 4
+pattern_table:                         ; Pattern table
        equ  >0000
 sprite_pattern_table:                  ; Sprite pattern table
+       equ  >0000
+name_table:                            ; Name table
+       equ  >1800
+tile_attr_table:                       ; Tile attribute table
+       equ  >1b00
+sprite_attr_table:                     ; Sprite attribute table
+       equ  >1c00
+bitmap_base:                           ; 128 x 96 x 4 bbp = 6K
        equ  >2000
-name_table:                            ; Name table x 2
-       equ  >2800
-sprite_attr_table:                     ; Sprite attribute table x 2
-       equ  >2b00
-color_table:                           ; Color table
-       equ  >2f00
+gpu_program:
+       equ  >3800
 
 **
 * Scratch pad
@@ -105,8 +113,143 @@ main:
        li   r10,stack                  ; Setup stack pointer
        li   r15,vdpwd
        bl   @one_time_init
+*      Bitmap
+       li   r0,bitmap_base
+       bl   @vwad
+       clr  r13
+       clr  r14
 loop:
-       jmp  loop
+       li   r0,64
+       a    r13,r0
+       li   r1,64
+       a    r14,r1
+       bl   @get_map_pixel
+       movb r0,r12
+       inct r13
+       li   r0,64
+       a    r13,r0
+       li   r1,64
+       a    r14,r1
+       bl   @get_map_pixel
+       sla  r12,4
+       socb r12,r0
+       movb r0,*r15
+       inct r13
+       ci   r13,256
+       jlt  loop
+       clr  r13
+       inc  r14
+       ci   r14,96
+       jlt  loop
+*      Tiles
+       li   r0,name_table+384
+       bl   @vwad
+       clr   r13
+       clr   r14
+loop2:
+       li   r0,64
+       a    r13,r0
+       li   r1,64
+       a    r14,r1
+       bl   @get_map_tile
+       movb r0,*r15
+       ai   r13,8
+       ci   r13,256
+       jlt  loop2
+       clr  r13
+       ai   r14,8
+       ci   r14,96
+       jlt  loop2
+*      End
+end:
+       jmp  end
+
+*********************************************************************************
+*
+* Get a pixel from the map
+*
+* r0: x coordinate 000000MM MMTTTPPP
+* r1: y coordinate 000000NN NNUUUQQQ
+*
+get_map_pixel:
+*      Meta tile 00000000NNNNMMMM
+       mov  r1,r2                      ; y
+       srl  r2,2                       ; Map y offset
+       andi r2,>00f0
+       mov  r0,r3                      ; x
+       srl  r3,6                       ; Map x offset
+       a    r3,r2                      ; Map offset
+       movb @MD0(r2),r2                ; Meta tile index in MSB
+       andi r2,>0f00
+       srl  r2,2                       ; Meta tile offset
+       ai   r2,MT0000                  ; Meta tile address
+*      Tile 0000000000UUUTTT
+       mov  r1,r3                      ; y
+       andi r3,>0038                   ; Tile y offset
+       mov  r0,r4                      ; x
+       srl  r4,3                       ; Tile x offset
+       andi r4,>0007
+       a    r4,r3                      ; Tile offset
+       a    r2,r3                      ; Add Meta tile address to get Tile address
+       movb *r3,r3                     ; Tile index in MSB
+       andi r3,>ff00
+       srl  r3,5                       ; Pattern offset
+*      Pattern
+       mov  r1,r4                      ; y
+       andi r4,>0007                   ; Pixel y offset
+       a    r3,r4                      ; Pattern pixel y offset
+       movb @P0_0(r4),r5               ; Pattern byte plane 0
+       movb @P1_0(r4),r6               ; Pattern byte plane 1
+       movb @P2_0(r4),r7               ; Pattern byte plane 2
+       andi r0,7                       ; Pixel x offset
+       neg  r0
+       ai   r0,7                       ; Bit shift
+       jeq  get_map_pixel_1
+       srl  r5,r0
+       srl  r6,r0
+       srl  r7,r0
+get_map_pixel_1:
+       andi r5,>0100
+       sla  r6,1
+       andi r6,>0200
+       socb r6,r5
+       sla  r7,2
+       andi r7,>0400
+       socb r7,r5
+       movb r5,r0
+       rt
+*// get_map_pixel
+
+*********************************************************************************
+*
+* Get a tile from the map
+*
+* r0: x coordinate 000000MM MMTTTPPP
+* r1: y coordinate 000000NN NNUUUQQQ
+*
+get_map_tile:
+*      Meta tile 00000000NNNNMMMM
+       mov  r1,r2                      ; y
+       srl  r2,2                       ; Map y offset
+       andi r2,>00f0
+       mov  r0,r3                      ; x
+       srl  r3,6                       ; Map x offset
+       a    r3,r2                      ; Map offset
+       movb @MD0(r2),r2                ; Meta tile index in MSB
+       andi r2,>0f00
+       srl  r2,2                       ; Meta tile offset
+       ai   r2,MT0000                  ; Meta tile address
+*      Tile 0000000000UUUTTT
+       mov  r1,r3                      ; y
+       andi r3,>0038                   ; Tile y offset
+       mov  r0,r4                      ; x
+       srl  r4,3                       ; Tile x offset
+       andi r4,>0007
+       a    r4,r3                      ; Tile offset
+       a    r2,r3                      ; Add Meta tile address to get Tile address
+       movb *r3,r0                     ; Tile index in MSB
+       rt
+*// get_map_tile
 
 *********************************************************************************
 *
@@ -171,15 +314,21 @@ graphics_mode_2:
 vregs2:
        byte >39,>1c                        ; Unlock F18A
        byte >39,>1c                        ; Unlock F18A
-       byte >1e,>04                        ; F18A: Max 4 sprites on a scanline
        byte >00,>00                        ; Graphics I mode
        byte >01,>e2                        ; 16K, display on, interrupts enabled
        byte >02,name_table/>400            ; Name table
-       byte >03,color_table/>40            ; Color table
+       byte >03,tile_attr_table/>40        ; Tile attribute table
        byte >04,pattern_table/>800         ; Pattern table
        byte >05,sprite_attr_table/>80      ; Sprite attribute table
        byte >06,sprite_pattern_table/>800  ; Sprite pattern table
        byte >07,>01                        ; Backdrop color
+       byte >1f,>D0                        ; Bitmap enable, fat pixels
+       byte >20,bitmap_base/>40            ; Bitmap address
+       byte >21,>00                        ; Bitmap x
+       byte >22,>00                        ; Bitmap y
+       byte >23,>00                        ; Bitmap width
+       byte >24,>60                        ; Bitmap height
+       byte >31,>3B                        ; ECM3 tiles + sprites, real y coord
        data -1
 *// graphics_mode
 
@@ -193,6 +342,39 @@ init_vdp_ram:
        clr  r1
        li   r2,>4000
        bl   @vsmw
+       li   r0,pattern_table
+       li   r1,P0_0
+       li   r2,n_patterns*8
+       bl   @vmbw
+       li   r0,pattern_table+>800
+       li   r1,P1_0
+       li   r2,n_patterns*8
+       bl   @vmbw
+       li   r0,pattern_table+>1000
+       li   r1,P2_0
+       li   r2,n_patterns*8
+       bl   @vmbw
+       li   r0,tile_attr_table
+       li   r1,TAT0
+       li   r2,n_patterns
+       bl   @vmbw
+*      Load palette
+       li  r0,>2fc0                   ; Reg 47, DPM = 1, AUTO INC = 1
+       li  r1,PAL0
+       bl   @vwtr
+       li  r2,16                      ; 16 bytes per palette
+*      Every two bytes written to the VDP now go to the palette registers
+load_palettes_1:
+       movb *r1+,*r15
+       dec  r2
+       jne  load_palettes_1
+*      Exit DPM
+       li   r0,>2f00                   ; Reg 47, DPM = 1, AUTO INC = 0
+       bl   @vwtr
+*      Sprites off
+       li   r0,sprite_attr_table
+       li   r1,>d000
+       bl   @vsbw
        .endproc
 *// init_vdp_ram
 
@@ -292,6 +474,7 @@ lower_memory_max:
 * Data
 *
        aorg >a000
+       copy "data.a99"
 
 ***************************************************************************
 *
