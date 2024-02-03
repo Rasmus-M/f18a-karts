@@ -22,10 +22,18 @@ screen_width:
        equ  screen_width_char*8
 screen_height:
        equ  screen_height_char*8
+map_width:
+       equ  16
+map_height:
+       equ  16
+meta_tile_width:
+       equ  8
+meta_tile_height:
+       equ  8
+n_meta_tiles:
+       equ  16
 n_patterns:
        equ  110
-n_meta_tiles:
-       equ  17
 
 **
 * Memory mapped addresses
@@ -53,6 +61,10 @@ pattern_table:                         ; Pattern table
        equ  >0000
 sprite_pattern_table:                  ; Sprite pattern table
        equ  >0000
+pattern_table_plane_1:
+       equ  >0800
+pattern_table_plane_2:
+       equ  >1000
 name_table:                            ; Name table
        equ  >1800
 tile_attr_table:                       ; Tile attribute table
@@ -61,8 +73,12 @@ sprite_attr_table:                     ; Sprite attribute table
        equ  >1c00
 bitmap_base:                           ; 128 x 96 x 4 bbp = 6K
        equ  >2000
-gpu_program:
+meta_tiles:
        equ  >3800
+map:
+       equ  >3c00
+gpu_program:
+       equ  >3d00
 
 **
 * Scratch pad
@@ -113,34 +129,11 @@ main:
        li   r10,stack                  ; Setup stack pointer
        li   r15,vdpwd
        bl   @one_time_init
-*      Bitmap
-       li   r0,bitmap_base
-       bl   @vwad
-       clr  r13
-       clr  r14
-loop:
-       li   r0,64
-       a    r13,r0
-       li   r1,64
-       a    r14,r1
-       bl   @get_map_pixel
-       movb r0,r12
-       inct r13
-       li   r0,64
-       a    r13,r0
-       li   r1,64
-       a    r14,r1
-       bl   @get_map_pixel
-       sla  r12,4
-       socb r12,r0
-       movb r0,*r15
-       inct r13
-       ci   r13,256
-       jlt  loop
-       clr  r13
-       inc  r14
-       ci   r14,96
-       jlt  loop
+*      Run GPU program
+       li   r0,gpu_program/256+>3600
+       bl   @vwtr
+       li   r0,gpu_program%256+>3700
+       bl   @vwtr
 *      Tiles
        li   r0,name_table+384
        bl   @vwad
@@ -342,6 +335,7 @@ init_vdp_ram:
        clr  r1
        li   r2,>4000
        bl   @vsmw
+*      Patterns
        li   r0,pattern_table
        li   r1,P0_0
        li   r2,n_patterns*8
@@ -354,6 +348,7 @@ init_vdp_ram:
        li   r1,P2_0
        li   r2,n_patterns*8
        bl   @vmbw
+*      Tile attributes
        li   r0,tile_attr_table
        li   r1,TAT0
        li   r2,n_patterns
@@ -364,13 +359,28 @@ init_vdp_ram:
        bl   @vwtr
        li  r2,16                      ; 16 bytes per palette
 *      Every two bytes written to the VDP now go to the palette registers
-load_palettes_1:
+load_palette_loop:
        movb *r1+,*r15
        dec  r2
-       jne  load_palettes_1
+       jne  load_palette_loop
 *      Exit DPM
        li   r0,>2f00                   ; Reg 47, DPM = 1, AUTO INC = 0
        bl   @vwtr
+*      Map data
+       li   r0,map
+       li   r1,MD0
+       li   r2,map_width*map_height
+       bl   @vmbw
+*      Meta tiles
+       li   r0,meta_tiles
+       li   r1,MT0000
+       li   r2,n_meta_tiles*meta_tile_width*meta_tile_height
+       bl   @vmbw
+*      GPU program
+       li   r0,gpu_program
+       li   r1,gpu_prg_start
+       li   r2,gpu_prg_end-gpu_prg_start
+       bl   @vmbw
 *      Sprites off
        li   r0,sprite_attr_table
        li   r1,>d000
@@ -465,6 +475,10 @@ check_key:
 * Program includes
 *
        copy "vdp.a99"
+gpu_prg_start:
+       copy "gpu.a99"
+gpu_prg_end:
+       equ  $
 
 lower_memory_max:
        equ  $

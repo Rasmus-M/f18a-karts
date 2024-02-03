@@ -1,0 +1,100 @@
+       xorg gpu_program
+
+       li   r15,>47fe                  ; Stack pointer
+gpu_loop:
+       call @draw_bitmap
+       idle
+       jmp  gpu_loop
+
+*********************************************************************************
+*
+* Draw bitmap
+*
+draw_bitmap:
+       li   r9,bitmap_base
+       clr  r12
+       clr  r13
+       clr  r14
+draw_bitmap_1:
+       li   r0,64
+       a    r13,r0
+       li   r1,64
+       a    r14,r1
+       call @get_map_pixel_gpu
+       movb r0,r12
+       inct r13
+       li   r0,64
+       a    r13,r0
+       li   r1,64
+       a    r14,r1
+       call @get_map_pixel_gpu
+       sla  r12,4
+       socb r12,r0
+       movb r0,*r9+
+       inct r13
+       ci   r13,256
+       jlt  draw_bitmap_1
+       clr  r13
+       inc  r14
+       ci   r14,96
+       jlt  draw_bitmap_1
+       ret
+*// draw_bitmap
+
+*********************************************************************************
+*
+* Get a pixel from the map (GPU)
+*
+* r0: x coordinate 000000MM MMTTTPPP
+* r1: y coordinate 000000NN NNUUUQQQ
+*
+get_map_pixel_gpu:
+*      Meta tile 00000000NNNNMMMM
+       mov  r1,r2                      ; y
+       srl  r2,2                       ; Map y offset
+       andi r2,>00f0
+       mov  r0,r3                      ; x
+       srl  r3,6                       ; Map x offset
+       a    r3,r2                      ; Map offset
+       movb @map(r2),r2                ; Meta tile index in MSB
+       andi r2,>0f00
+       srl  r2,2                       ; Meta tile offset
+       ai   r2,meta_tiles              ; Meta tile address
+*      Tile 0000000000UUUTTT
+       mov  r1,r3                      ; y
+       andi r3,>0038                   ; Tile y offset
+       mov  r0,r4                      ; x
+       srl  r4,3                       ; Tile x offset
+       andi r4,>0007
+       a    r4,r3                      ; Tile offset
+       a    r2,r3                      ; Add Meta tile address to get Tile address
+       movb *r3,r3                     ; Tile index in MSB
+       andi r3,>ff00
+       srl  r3,5                       ; Pattern offset
+*      Pattern
+       mov  r1,r4                      ; y
+       andi r4,>0007                   ; Pixel y offset
+       a    r3,r4                      ; Pattern pixel y offset
+       movb @pattern_table(r4),r5         ; Pattern byte plane 0
+       movb @pattern_table_plane_1(r4),r6 ; Pattern byte plane 1
+       movb @pattern_table_plane_2(r4),r7 ; Pattern byte plane 2
+       andi r0,7                       ; Pixel x offset
+       neg  r0
+       ai   r0,7                       ; Bit shift
+       jeq  get_map_pixel_gpu_1
+       srl  r5,r0
+       srl  r6,r0
+       srl  r7,r0
+get_map_pixel_gpu_1:
+       andi r5,>0100
+       sla  r6,1
+       andi r6,>0200
+       socb r6,r5
+       sla  r7,2
+       andi r7,>0400
+       socb r7,r5
+       movb r5,r0
+       ret
+*// get_map_pixel_gpu
+
+       aorg
