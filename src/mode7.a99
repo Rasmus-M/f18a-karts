@@ -24,8 +24,10 @@ screen_height:
        equ  screen_height_char*8
 bitmap_width:
        equ  128
-bitmap_height:
-       equ  96
+bitmap_height_1:
+       equ  64
+bitmap_height_2:
+       equ  128
 
 **
 * Memory mapped addresses
@@ -52,7 +54,7 @@ spchrd:
 bitmap_base:                           ; 128 x 192 x 4 bbp = 12K
        equ  >0000
 bitmap_base_2:
-       equ  >1800
+       equ  >1000
 pattern_table:                         ; Pattern table
        equ  >3000
 sprite_pattern_table:                  ; Sprite pattern table
@@ -221,7 +223,7 @@ init_vdp_ram:
 *      Bitmap
        li   r0,bitmap_base_2
        li   r1,bmp
-       li   r2,>1800
+       li   r2,>2000
        bl   @vmbw
 ;*      Load palette
 ;       li  r0,>2fc0                   ; Reg 47, DPM = 1, AUTO INC = 1

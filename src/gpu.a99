@@ -2,10 +2,11 @@
 
        li   r15,>47fe                  ; Stack pointer
        li   r0,>0100                   ; dx (FP 8.8)
-       li   r1,>0000                   ; dy (FP 8.8)
+       li   r1,>0100                   ; dy (FP 8.8)
 gpu_loop:
        call @draw_bitmap
        dec  r0
+       inc  r1
 ;       idle
        jmp  gpu_loop
 
@@ -20,7 +21,7 @@ draw_bitmap:
        clr  r3                         ; y (FP 8.8, YYYYYYYY.yyyyyyyy)
        li   r11,>0100                  ; x bit determining left or right pixel
        li   r4,bitmap_base
-       li   r5,bitmap_height
+       li   r5,bitmap_height_1
        clr  r10
 draw_bitmap_1:
        li   r6,bitmap_width/2
@@ -29,7 +30,7 @@ draw_bitmap_1:
 draw_bitmap_2:
 *      Left destination pixel
        mov  r2,r9                      ; XXXXXXXX.xxxxxxxx
-       srl  r9,7                       ; 00000000.XXXXXXXx
+       srl  r9,7                       ; 0000000X.XXXXXXXx
        movb r3,r9                      ; YYYYYYYY.XXXXXXXx
        sla  r9,1                       ; YYYYYYYX.XXXXXXx0
        srl  r9,3                       ; 000YYYYY.YYXXXXXX
@@ -47,7 +48,7 @@ draw_bitmap_3a:
        a    r1,r3                      ; y += dy
 *      Right destination pixel
        mov  r2,r9                      ; XXXXXXXX.xxxxxxxx
-       srl  r9,7                       ; 00000000.XXXXXXXx
+       srl  r9,7                       ; 0000000X.XXXXXXXx
        movb r3,r9                      ; YYYYYYYY.XXXXXXXx
        sla  r9,1                       ; YYYYYYYX.XXXXXXx0
        srl  r9,3                       ; 000YYYYY.YYXXXXXX
