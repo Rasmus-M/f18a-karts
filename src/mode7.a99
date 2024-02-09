@@ -22,6 +22,8 @@ screen_width:
        equ  screen_width_char*8
 screen_height:
        equ  screen_height_char*8
+bitmap_top:
+       equ  48
 bitmap_width:
        equ  128
 bitmap_height_1:
@@ -122,11 +124,54 @@ main:
        bl   @vwtr
        li   r0,gpu_program%256+>3700
        bl   @vwtr
-*      End
-end:
-;       li   r0,>3801
-;       bl   @vwtr
-       jmp  end
+loop:
+       bl   @vsync
+       bl   @wait_gpu
+       mov  @angle,r1
+       bl   @cos
+;       li   r1,>0000
+       li   r0,dx
+       bl   @vsww
+       mov  @angle,r1
+       bl   @sin
+;       li   r1,>0100
+       li   r0,dy
+       bl   @vsww
+       li   r0,>3801
+       bl   @vwtr
+       inc  @angle
+       jmp  loop
+angle:
+       data  0
+
+*********************************************************************
+*
+* Wait for vertical retrace (CRU)
+*
+vsync:
+       .proc
+       movb @vdpsta,r12
+vsync_1:
+       clr  r12
+       tb   2                          ; Test CRU bit for VDP interrupt
+       jeq  vsync_1
+       movb @vdpsta,r12
+       .endproc
+*// vsync
+
+*********************************************************************************
+*
+* Wait for the GPU to be idle
+*
+wait_gpu:
+       .proc
+       li   r0,>0f02
+       bl   @vwtr
+wait_gpu_1:
+       movb @vdpsta,r0
+       jlt  wait_gpu_1
+       .endproc
+*// wait_gpu
 
 *********************************************************************************
 *
@@ -203,10 +248,10 @@ vregs2:
        byte >1f,>d0                        ; Bitmap enable, fat pixels
        byte >20,bitmap_base/>40            ; Bitmap address
        byte >21,>00                        ; Bitmap x
-       byte >22,>00                        ; Bitmap y
+       byte >22,bitmap_top                 ; Bitmap y
        byte >23,>00                        ; Bitmap width
        byte >24,>c0                        ; Bitmap height
-       byte >31,>2a                        ; ECM2 tiles + sprites, real y coord
+       byte >31,>6a                        ; ROW30, ECM2 tiles + sprites, real y coord
        data -1
 *// graphics_mode
 
@@ -246,6 +291,10 @@ init_vdp_ram:
 *      Sprites off
        li   r0,sprite_attr_table
        li   r1,>d000
+       bl   @vsbw
+*      Tile attributes
+       li   r0,tile_attr_table
+       li   r1,>0100
        bl   @vsbw
        .endproc
 *// init_vdp_ram
@@ -337,6 +386,7 @@ check_key:
 * Program includes
 *
        copy "vdp.a99"
+       copy "math.a99"
 gpu_prg_start:
        copy "gpu.a99"
 gpu_prg_end:
@@ -350,14 +400,14 @@ lower_memory_max:
 * Data
 *
        aorg >a000
-       copy "data.a99"
-bmp:
-       bcopy "bitmap.bin"
 
 ***************************************************************************
 *
 * Data includes
 *
+       copy "data.a99"
+bmp:
+       bcopy "bitmap.bin"
 
 upper_memory_max:
        equ  $
