@@ -7,17 +7,12 @@ gpu_loop:
        mov  @dy,r1
        mov  @x,r2
        mov  @y,r3
-
        call @draw_bitmap
        jmp  gpu_loop
 
-x0:                                    ; Center x
-       data >4000
-y0:                                    ; Center y
-       data >4000
-x:
-       data >4000
-y:
+x:                                     ;
+       data >8000
+y:                                     ;
        data >4000
 dx:
        data >0000
@@ -28,29 +23,40 @@ dy:
 *
 * Draw bitmap
 *
-* r0: dx (FP 8.8)
-* r1: dy (FP 8.8)
-* r2: x (FP 8.8, XXXXXXXX.xxxxxxxx)
-* r3: y (FP 8.8, YYYYYYYY.yyyyyyyy)
-* Source address is 000YYYYY.YYXXXXXX
+* r0: dx is the x-coordinate of the vector that's added to the source map position each step (FP 8.8)
+* r1: dy is the y-coordinate of the vector that's added to the source map position each step (FP 8.8)
+* r2: Center x in source map coordinates x (FP 8.8, XXXXXXXX.xxxxxxxx).
+*     Values of 0-255 are within bounds of source map (each wide pixel has two positions).
+* r3: Center y in source map coordinates y (FP 8.8, YYYYYYYY.yyyyyyyy).
+*     Values of 0-127 are within bounds of source map.
+*
+* Source address is calculated as 000YYYYY.YYXXXXXX
 *
 draw_bitmap:
-*      Adjust
+*      Move (x, y) coordinates, which as parameters specify the center,
+*      back and up to the top left corner of the transformed area.
+*      x = x - 128 * dx + 32 * dy
+*      y = y - 128 * dy - 32 * dx
+*      Note that this fails if dx >= 2 (>0200)
        mov  r0,r13                     ; dx
        sla  r13,5                      ; 32 * dx
        s    r13,r3                     ; y -= 32 * dx
-       sla  r13,1                      ; 64 * dx
-       s    r13,r2                     ; x -= 64 * dx
-       mov  r1,r13                     ; dy
-       sla  r13,5                      ; 32 * dy
-       a    r13,r2                     ; x += 32 * dy
-       sla  r13,1                      ; 64 * dy
-       s    r13,r3                     ; y -= 64 * dy
+       sla  r13,2                      ; 128 * dx
+       s    r13,r2                     ; x -= 128 * dx
+       mov  r1,r14                     ; dy
+       sla  r14,5                      ; 32 * dy
+       a    r14,r2                     ; x += 32 * dy
+       sla  r14,2                      ; 128 * dy
+       s    r14,r3                     ; y -= 128 * dy
 *      Init
-       li   r11,>0100                  ; x bit determining left or right pixel
+       li   r11,>0200                  ; x bit determining left or right pixel
        li   r4,bitmap_base
        li   r5,bitmap_height_1
        clr  r10
+       mov  r0,r13                     ; dx
+       sla  r13,1                      ; 2 * dx
+       mov  r1,r14                     ; dy
+       sla  r14,1                      ; 2 * dy
 draw_bitmap_1:
        li   r6,bitmap_width/2
        mov  r2,r7                      ; Save x
@@ -58,9 +64,9 @@ draw_bitmap_1:
 draw_bitmap_2:
 *      Left destination pixel
        mov  r2,r9                      ; XXXXXXXX.xxxxxxxx
-       srl  r9,7                       ; 0000000X.XXXXXXXx
-       movb r3,r9                      ; YYYYYYYY.XXXXXXXx
-       sla  r9,1                       ; YYYYYYYX.XXXXXXx0
+       swpb r9                         ; 00000000.XXXXXXXX
+       movb r3,r9                      ; YYYYYYYY.XXXXXXXX
+       sla  r9,1                       ; YYYYYYYX.XXXXXXX0
        srl  r9,3                       ; 000YYYYY.YYXXXXXX
        movb @bitmap_base_2(r9),r10
 *      Isolate pixel in left nybble
@@ -72,13 +78,13 @@ draw_bitmap_3:
        andi r10,>f000
 draw_bitmap_3a:
 *      Move x and y to next pixel
-       a    r0,r2                      ; x += dx
-       a    r1,r3                      ; y += dy
+       a    r13,r2                     ; x += 2 * dx
+       a    r14,r3                     ; y += 2 * dy
 *      Right destination pixel
        mov  r2,r9                      ; XXXXXXXX.xxxxxxxx
-       srl  r9,7                       ; 0000000X.XXXXXXXx
-       movb r3,r9                      ; YYYYYYYY.XXXXXXXx
-       sla  r9,1                       ; YYYYYYYX.XXXXXXx0
+       swpb r9                         ; 00000000.XXXXXXXX
+       movb r3,r9                      ; YYYYYYYY.XXXXXXXX
+       sla  r9,1                       ; YYYYYYYX.XXXXXXX0
        srl  r9,3                       ; 000YYYYY.YYXXXXXX
        movb @bitmap_base_2(r9),r12
 *      Isolate pixel in right nybble
@@ -90,8 +96,8 @@ draw_bitmap_4:
        andi r12,>0f00
 draw_bitmap_4a:
 *      Move x and y to next pixel
-       a    r0,r2                      ; x += dx
-       a    r1,r3                      ; y += dy
+       a    r13,r2                     ; x += 2 * dx
+       a    r14,r3                     ; y += 2 * dy
 *      Write to destination
        socb r12,r10                    ; Combine left and right pixels
        movb r10,*r4+                   ; Write byte to destination

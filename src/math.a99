@@ -1,5 +1,36 @@
 *********************************************************************
 *
+* Fixed point 8.8 multiplication
+*
+* r1: Multiplicand (FP 8.8)
+* r2: Multiplier (FP 8.8)
+*
+* On return r1 contains multiplied value
+*
+mpy_fp88:
+       clr  r3                         ; Sign (0 means positive)
+       mov  r1,r1                      ; Test sign
+       jgt  mpy_fp88_1
+       neg  r1                         ; Make positive
+       inv  r3                         ; Flip sign (-1 means negative)
+mpy_fp88_1:
+       mov  r2,r2                      ; Test sign
+       jgt  mpy_fp88_2
+       neg  r12                        ; Make positive
+       inv  r3                         ; Flip sign
+mpy_fp88_2:
+       mpy  r2,r1                      ; Multiply the numbers
+       movb r2,r1                      ; We need the MSB of r2 (decimals)
+       swpb r1                         ; And the LSB of r1 (whole number) in reverse order
+       mov  r3,r3                      ; Test sign
+       jeq  mpy_fp88_3                 ; Jump if sign positive
+       neg  r1                         ; Nagate result
+mpy_fp88_3:
+       rt
+*// mpy_fp88
+
+*********************************************************************
+*
 * Calculate sine
 *
 * r1: Angle in units of 1/256 of a circle

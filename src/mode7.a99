@@ -129,20 +129,25 @@ loop:
        bl   @wait_gpu
        mov  @angle,r1
        bl   @cos
-;       li   r1,>0000
+       mov  @zoom,r2
+       bl   @mpy_fp88
        li   r0,dx
        bl   @vsww
        mov  @angle,r1
        bl   @sin
-;       li   r1,>0100
+       mov  @zoom,r2
+       bl   @mpy_fp88
        li   r0,dy
        bl   @vsww
        li   r0,>3801
        bl   @vwtr
        inc  @angle
+       inc  @zoom
        jmp  loop
 angle:
-       data  0
+       data 0
+zoom:
+       data >0000
 
 *********************************************************************
 *
