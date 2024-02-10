@@ -127,11 +127,19 @@ main:
 loop:
        bl   @vsync
        bl   @wait_gpu
+*      x
+       mov  @x1,r1
+       li   r0,x
+       bl   @vsww
        mov  @angle,r1
        bl   @cos
        mov  @zoom,r2
        bl   @mpy_fp88
        li   r0,dx
+       bl   @vsww
+*      y
+       mov  @y1,r1
+       li   r0,y
        bl   @vsww
        mov  @angle,r1
        bl   @sin
@@ -139,14 +147,24 @@ loop:
        bl   @mpy_fp88
        li   r0,dy
        bl   @vsww
+*      Trigger GPU
        li   r0,>3801
        bl   @vwtr
+*      Update parameters
+       li   r1,>0100
+       a    r1,@x1
+       a    r1,@y1
        inc  @angle
        inc  @zoom
+*      loop
        jmp  loop
-angle:
+x1:                                    ; FP 8.8
+       data >0800
+y1:                                    ; FP 8.8
+       data >0400
+angle:                                 ; 0 - 255
        data 0
-zoom:
+zoom:                                  ; FP 8.8
        data >0000
 
 *********************************************************************
