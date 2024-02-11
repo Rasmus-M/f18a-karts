@@ -26,10 +26,14 @@ bitmap_top:
        equ  48
 bitmap_width:
        equ  128
-bitmap_height_1:
+bitmap_dst_height:
        equ  64
-bitmap_height_2:
+bitmap_gap_height:
+       equ  0
+bitmap_src_height:
        equ  128
+bitmap_height:
+       equ  bitmap_dst_height+bitmap_gap_height+bitmap_src_height
 
 **
 * Memory mapped addresses
@@ -53,9 +57,11 @@ spchrd:
 **
 * VDP memory map
 *
-bitmap_base:                           ; 128 x 192 x 4 bbp = 12K
+gpu_program_tmp:
        equ  >0000
-bitmap_base_2:
+bitmap_dst:                            ; 128 x 192 x 4 bbp = 12K
+       equ  >0000
+bitmap_src:
        equ  >1000
 pattern_table:                         ; Pattern table
        equ  >3000
@@ -67,8 +73,10 @@ tile_attr_table:                       ; Tile attribute table
        equ  >3b00
 sprite_attr_table:                     ; Sprite attribute table
        equ  >3c00
-gpu_program:
+gpu_data:
        equ  >3c80
+gpu_program:
+       equ  >4000
 
 **
 * Scratch pad
@@ -119,10 +127,10 @@ main:
        li   r10,stack                  ; Setup stack pointer
        li   r15,vdpwd
        bl   @one_time_init
-*      Run GPU program
-       li   r0,gpu_program/256+>3600
+*      Run GPU program, which moves it into high GPU RAM
+       li   r0,gpu_program_tmp/256+>3600
        bl   @vwtr
-       li   r0,gpu_program%256+>3700
+       li   r0,gpu_program_tmp%256+>3700
        bl   @vwtr
 loop:
        bl   @vsync
@@ -151,21 +159,21 @@ loop:
        li   r0,>3801
        bl   @vwtr
 *      Update parameters
-       li   r1,>0100
-       a    r1,@x1
-       a    r1,@y1
-       inc  @angle
-       inc  @zoom
+;       li   r1,>0100
+;       a    r1,@x1
+;       a    r1,@y1
+;       inc  @angle
+;       inc  @zoom
 *      loop
        jmp  loop
 x1:                                    ; FP 8.8
-       data >0800
+       data >7f00
 y1:                                    ; FP 8.8
-       data >0400
+       data >7f00
 angle:                                 ; 0 - 255
        data 0
 zoom:                                  ; FP 8.8
-       data >0000
+       data >0100
 
 *********************************************************************
 *
@@ -269,11 +277,11 @@ vregs2:
        byte >07,>01                        ; Backdrop color
        byte >1d,>44                        ; 1K bytes between sprite + tile planes
        byte >1f,>d0                        ; Bitmap enable, fat pixels
-       byte >20,bitmap_base/>40            ; Bitmap address
+       byte >20,bitmap_dst/>40             ; Bitmap address
        byte >21,>00                        ; Bitmap x
        byte >22,bitmap_top                 ; Bitmap y
        byte >23,>00                        ; Bitmap width
-       byte >24,>c0                        ; Bitmap height
+       byte >24,bitmap_height              ; Bitmap height
        byte >31,>6a                        ; ROW30, ECM2 tiles + sprites, real y coord
        data -1
 *// graphics_mode
@@ -284,12 +292,13 @@ vregs2:
 *
 init_vdp_ram:
        .proc
+*      Clear all
        clr  r0
        clr  r1
        li   r2,>4000
        bl   @vsmw
 *      Bitmap
-       li   r0,bitmap_base_2
+       li   r0,bitmap_src
        li   r1,bmp
        li   r2,>2000
        bl   @vmbw
@@ -306,18 +315,23 @@ init_vdp_ram:
 ;*      Exit DPM
 ;       li   r0,>2f00                   ; Reg 47, DPM = 1, AUTO INC = 0
 ;       bl   @vwtr
+*      Tile attributes
+       li   r0,tile_attr_table
+       li   r1,>0100
+       bl   @vsbw
 *      GPU program
-       li   r0,gpu_program
+       li   r0,gpu_program_tmp
        li   r1,gpu_prg_start
        li   r2,gpu_prg_end-gpu_prg_start
+       bl   @vmbw
+*      GPU data
+       li   r0,gpu_data
+       li   r1,gpu_data_start
+       li   r2,gpu_data_end-gpu_data_start
        bl   @vmbw
 *      Sprites off
        li   r0,sprite_attr_table
        li   r1,>d000
-       bl   @vsbw
-*      Tile attributes
-       li   r0,tile_attr_table
-       li   r1,>0100
        bl   @vsbw
        .endproc
 *// init_vdp_ram
@@ -429,6 +443,10 @@ lower_memory_max:
 * Data includes
 *
        copy "data.a99"
+gpu_data_start:
+       copy "gpu_data.a99"
+gpu_data_end:
+       equ  $
 bmp:
        bcopy "bitmap.bin"
 

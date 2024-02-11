@@ -1,0 +1,16 @@
+*********************************************************************************
+*
+* Data exchanged between CPU and GPU
+*
+       xorg gpu_data
+x:                                     ;
+       data >8000
+y:                                     ;
+       data >4000
+dx:
+       data >0000
+dy:
+       data >0000
+
+       aorg
+
