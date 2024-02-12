@@ -222,21 +222,41 @@ wait_gpu_1:
 *
 user_input:
        .proc
+       clr  r1
        li   r0,JOY_FI
        bl   @check_key
+       jeq  user_input_0
+       inc  r1
+user_input_0:
+*      Left
        tb   1
        jeq  user_input_1
+       abs  r1
+       jne  user_input_0a
        dect @angle
+       jmp  user_input_1
+user_input_0a:
+       s    @dx,@x
+       s    @dy,@y
 user_input_1:
+*      Right
        tb   2
        jeq  user_input_2
+       abs  r1
+       jne  user_input_1a
        inct @angle
+       jmp  user_input_2
+user_input_1a:
+       a    @dx,@x
+       a    @dy,@y
 user_input_2:
+*      Forward
        tb   3
        jeq  user_input_3
        s    @dy,@x
        a    @dx,@y
 user_input_3:
+*      Backward
        tb   4
        jeq  user_input_4
        a    @dy,@x
