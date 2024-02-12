@@ -18,10 +18,10 @@ gpu_prg_high_start:
        li   r15,>47fe                  ; Stack pointer
 gpu_loop:
        idle
-       mov  @dx,r0
-       mov  @dy,r1
-       mov  @x,r2
-       mov  @y,r3
+       mov  @gpu_dx,r0
+       mov  @gpu_dy,r1
+       mov  @gpu_x,r2
+       mov  @gpu_y,r3
        call @draw_bitmap
        jmp  gpu_loop
 
@@ -39,29 +39,28 @@ gpu_loop:
 * Source address is calculated as 000YYYYY.YYXXXXXX
 *
 draw_bitmap:
-*      Move (x, y) coordinates, which as parameters specify the center bottom,
-*      to the left side of the transformed area.
-*      x -= 128 * dx, y -= 128 * dy
-*      Note that this overflows if dx or dy >= 2 (>0200).
-       mov  r0,r13                     ; dx
-       sla  r13,7                      ; 128 * dx
-       s    r13,r2                     ; x -= 128 * dx
-       mov  r1,r14                     ; dy
-       sla  r14,7                      ; 128 * dy
-       s    r14,r3                     ; y -= 128 * dy
 *      Init
        li   r11,>0200                  ; x bit determining left or right pixel
        li   r4,bitmap_dst + (bitmap_dst_height - 1) * (bitmap_width / 2)
-       li   r5,bitmap_dst_height
+       clr  r5                         ; Row index * 2, bottom row = 0
        clr  r10
-       mov  r0,r13                     ; dx
-       sla  r13,1                      ; 2 * dx
-       mov  r1,r14                     ; dy
-       sla  r14,1                      ; 2 * dy
 draw_bitmap_1:
-       li   r6,bitmap_width/2
-       mov  r2,r7                      ; Save x
-       mov  r3,r8                      ; Save y
+       li   r6,bitmap_width/2          ; Column counter
+       push r2                         ; Save x
+       push r3                         ; Save y
+*      Scale row x
+       mov  r0,r7                      ; dx
+       mov  @scale_table(r5),r8        ; scale
+       call @gpu_mpy_fp88
+       mov  r7,r13                     ; dx * scale
+       s    r8,r2                      ; x -= 64 * dx * scale
+*      Scale row y
+       mov  r1,r7                      ; dy
+       mov  @scale_table(r5),r8        ; scale
+       call @gpu_mpy_fp88
+       mov  r7,r14                     ; dy * scale
+       s    r8,r3                      ; y -= 64 * dy * scale
+;       call @plot
 draw_bitmap_2:
 *      Left destination pixel
        mov  r2,r9                      ; XXXXXXXX.xxxxxxxx
@@ -79,8 +78,8 @@ draw_bitmap_3:
        andi r10,>f000
 draw_bitmap_3a:
 *      Move x and y to next pixel
-       a    r13,r2                     ; x += 2 * dx
-       a    r14,r3                     ; y += 2 * dy
+       a    r13,r2                     ; x += dx * scale
+       a    r14,r3                     ; y += dy * scale
 *      Right destination pixel
        mov  r2,r9                      ; XXXXXXXX.xxxxxxxx
        swpb r9                         ; 00000000.XXXXXXXX
@@ -97,8 +96,8 @@ draw_bitmap_4:
        andi r12,>0f00
 draw_bitmap_4a:
 *      Move x and y to next pixel
-       a    r13,r2                     ; x += 2 * dx
-       a    r14,r3                     ; y += 2 * dy
+       a    r13,r2                     ; x += dx * scale
+       a    r14,r3                     ; y += dy * scale
 *      Write to destination
        socb r12,r10                    ; Combine left and right pixels
        movb r10,*r4+                   ; Write byte to destination
@@ -106,15 +105,105 @@ draw_bitmap_4a:
        dec  r6
        jne  draw_bitmap_2
 *      Next row
-       mov  r7,r2                      ; Restore x
-       mov  r8,r3                      ; Restore y
-       a    r1,r2                      ; x += dy
-       s    r0,r3                      ; y -= dx
+;       call @plot
+       pop  r3                         ; Restore y
+       sla  r13,2
+       s    r13,r3                     ; y -= dx * scale / 2
+       pop  r2                         ; Restore x
+       sla  r14,2
+       a    r14,r2                     ; x += dy * scale / 2
        ai   r4,-bitmap_width           ; Move destination 2 lines up
-       dec  r5
+       inct r5
+       ci   r5,bitmap_dst_height*2
        jne  draw_bitmap_1
        ret
 *// draw_bitmap
+
+*********************************************************************
+*
+* Fixed point 8.8 multiplication
+*
+* r7: Multiplicand (FP 8.8)
+* r8: Multiplier (FP 8.8)
+*
+* On return r7 contains multiplied value as FP 8.8.
+* r8 contains the multiplied value as FP 2.14,
+* or times 64 with more decimals.
+*
+gpu_mpy_fp88:
+       clr  r9                         ; Sign (0 means positive)
+       mov  r7,r7                      ; Test sign
+       jgt  gpu_mpy_fp88_1
+       neg  r7                         ; Make positive
+       inv  r9                         ; Flip sign (-1 means negative)
+gpu_mpy_fp88_1:
+       mov  r8,r8                      ; Test sign
+       jgt  gpu_mpy_fp88_2
+       neg  r8                         ; Make positive
+       inv  r9                         ; Flip sign
+gpu_mpy_fp88_2:
+       mpy  r8,r7                      ; Multiply the numbers
+       movb r8,r7                      ; We need the MSB of r8 (decimals)
+       swpb r7                         ; And the LSB of r7 (whole number) in reverse order
+       mov  r9,r9                      ; Test sign
+       jeq  gpu_mpy_fp88_3             ; Jump if sign positive
+       neg  r7                         ; Negate result
+       neg  r8
+gpu_mpy_fp88_3:
+*      Construct result as FP 2.14 in r8
+       mov  r7,r9                      ; 77777777.88888888
+       sla  r9,6                       ; 77888888.88000000
+       sra  r8,2                       ; 00888888.88888888
+       andi r8,>003f                   ; 00000000.00888888
+       soc  r9,r8                      ; 77888888.88888888
+       ret
+*// gpu_mpy_fp88
+
+*********************************************************************
+*
+* Plot a point on the source bitmap
+*
+* r2: x (FP 8.8)
+* r3: y (FP 8.8)
+*
+plot:
+       push r9
+       push r10
+       push r11
+       mov  r2,r9                      ; XXXXXXXX.xxxxxxxx
+       swpb r9                         ; 00000000.XXXXXXXX
+       movb r3,r9                      ; YYYYYYYY.XXXXXXXX
+       sla  r9,1                       ; YYYYYYYX.XXXXXXX0
+       srl  r9,3                       ; 000YYYYY.YYXXXXXX
+       movb @bitmap_src(r9),r10
+       li   r11,>0200
+       coc  r11,r2                     ; Left or right pixel?
+       jne  plot_1
+       andi r10,>f000
+       ori  r10,>0100
+       jmp  plot_2
+plot_1:
+       andi r10,>0f00
+       ori  r10,>1000
+plot_2:
+       movb r10,@bitmap_src(r9)
+       pop  r11
+       pop  r10
+       pop  r9
+       ret
+*// plot
+
+*********************************************************************
+*
+scale_table:
+       data >0020,>0021,>0021,>0022,>0022,>0023,>0023,>0024
+       data >0025,>0025,>0026,>0027,>0027,>0028,>0029,>002a
+       data >002b,>002c,>002d,>002e,>002f,>0030,>0031,>0032
+       data >0033,>0035,>0036,>0037,>0039,>003b,>003c,>003e
+       data >0040,>0042,>0044,>0047,>0049,>004c,>004f,>0052
+       data >0055,>0059,>005d,>0062,>0066,>006c,>0072,>0078
+       data >0080,>0089,>0092,>009e,>00ab,>00ba,>00cd,>00e4
+       data >0100,>0125,>0155,>019a,>0200,>02ab,>0400,>0800
 
 gpu_prg_high_end:
        equ  $

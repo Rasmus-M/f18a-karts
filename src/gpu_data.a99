@@ -3,13 +3,13 @@
 * Data exchanged between CPU and GPU
 *
        xorg gpu_data
-x:                                     ;
+gpu_x:                                     ;
        data >8000
-y:                                     ;
+gpu_y:                                     ;
        data >4000
-dx:
+gpu_dx:
        data >0000
-dy:
+gpu_dy:
        data >0000
 
        aorg

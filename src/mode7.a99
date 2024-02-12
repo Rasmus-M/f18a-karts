@@ -15,7 +15,7 @@
 screen_width_char:
        equ  32
 screen_height_char:
-       equ  24
+       equ  30
 screen_size_char:
        equ  screen_width_char*screen_height_char
 screen_width:
@@ -23,13 +23,15 @@ screen_width:
 screen_height:
        equ  screen_height_char*8
 bitmap_top:
-       equ  48
+       equ  40
 bitmap_width:
        equ  128
 bitmap_dst_height:
        equ  64
 bitmap_gap_height:
-       equ  0
+       equ  8
+bitmap_src_top:
+       equ  bitmap_top+bitmap_dst_height+bitmap_gap_height
 bitmap_src_height:
        equ  128
 bitmap_height:
@@ -59,22 +61,28 @@ spchrd:
 *
 gpu_program_tmp:
        equ  >0000
-bitmap_dst:                            ; 128 x 192 x 4 bbp = 12K
+bitmap_base:
        equ  >0000
+bitmap_dst:                            ; 128 x 192 x 4 bbp = 12K
+       equ  bitmap_base
+bitmap_gap:
+       equ  bitmap_base + (bitmap_dst_height * bitmap_width / 2)
 bitmap_src:
-       equ  >1000
-pattern_table:                         ; Pattern table
-       equ  >3000
-sprite_pattern_table:                  ; Sprite pattern table
-       equ  >3000
-name_table:                            ; Name table
-       equ  >3800
-tile_attr_table:                       ; Tile attribute table
-       equ  >3b00
+       equ  bitmap_gap + (bitmap_gap_height * bitmap_width / 2)
 sprite_attr_table:                     ; Sprite attribute table
-       equ  >3c00
+       equ  >3200
 gpu_data:
-       equ  >3c80
+       equ  >3280
+tile_attr_table:                       ; Tile attribute table
+       equ  >3300
+name_table:                            ; Name table (note: we probably only need 4-6 rows of this)
+       equ  >3400
+pattern_table:                         ; Pattern table
+       equ  >3800
+sprite_pattern_table:                  ; Sprite pattern table
+       equ  >3800
+sprite_pattern_table_p1:               ; Sprite pattern table plane 1
+       equ  >3c00
 gpu_program:
        equ  >4000
 
@@ -136,40 +144,44 @@ loop:
        bl   @vsync
        bl   @wait_gpu
 *      x
-       mov  @x1,r1
-       li   r0,x
+       mov  @x,r1
+       li   r0,gpu_x
        bl   @vsww
        mov  @angle,r1
        bl   @cos
        mov  @zoom,r2
        bl   @mpy_fp88
-       li   r0,dx
+       mov  r1,@dx
+       li   r0,gpu_dx
        bl   @vsww
 *      y
-       mov  @y1,r1
-       li   r0,y
+       mov  @y,r1
+       li   r0,gpu_y
        bl   @vsww
        mov  @angle,r1
        bl   @sin
        mov  @zoom,r2
        bl   @mpy_fp88
-       li   r0,dy
+       mov  r1,@dy
+       li   r0,gpu_dy
        bl   @vsww
 *      Trigger GPU
        li   r0,>3801
        bl   @vwtr
 *      Update parameters
-;       li   r1,>0100
-;       a    r1,@x1
-;       a    r1,@y1
-;       inc  @angle
-;       inc  @zoom
+       bl   @user_input
+*      Display sprites
+       bl   @display_sprites
 *      loop
        jmp  loop
-x1:                                    ; FP 8.8
-       data >7f00
-y1:                                    ; FP 8.8
-       data >7f00
+x:                                     ; FP 8.8
+       data >8000
+y:                                     ; FP 8.8
+       data >4000
+dx:                                    ; FP 8.8
+       data ->0100
+dy:                                    ; FP 8.8
+       data >0000
 angle:                                 ; 0 - 255
        data 0
 zoom:                                  ; FP 8.8
@@ -203,6 +215,58 @@ wait_gpu_1:
        jlt  wait_gpu_1
        .endproc
 *// wait_gpu
+
+*********************************************************************************
+*
+* User input
+*
+user_input:
+       .proc
+       li   r0,JOY_FI
+       bl   @check_key
+       tb   1
+       jeq  user_input_1
+       dect @angle
+user_input_1:
+       tb   2
+       jeq  user_input_2
+       inct @angle
+user_input_2:
+       tb   3
+       jeq  user_input_3
+       s    @dy,@x
+       a    @dx,@y
+user_input_3:
+       tb   4
+       jeq  user_input_4
+       a    @dy,@x
+       s    @dx,@y
+user_input_4:
+       .endproc
+*// user_input
+
+*********************************************************************************
+*
+* Display sprites
+*
+display_sprites:
+       .proc
+       li   r0,sprite_attr_table
+       bl   @vwad
+       mov  @y,r1
+       andi r1,>7f00
+       ai   r1,->0800
+       ai   r1,bitmap_src_top*256
+       movb r1,*r15
+       mov  @x,r1
+       ai   r1,->0800
+       movb r1,*r15
+       li   r1,>0000
+       movb r1,*r15
+       swpb r1
+       movb r1,*r15
+       .endproc
+*// display_sprites
 
 *********************************************************************************
 *
@@ -283,6 +347,7 @@ vregs2:
        byte >23,>00                        ; Bitmap width
        byte >24,bitmap_height              ; Bitmap height
        byte >31,>6a                        ; ROW30, ECM2 tiles + sprites, real y coord
+       byte >33,>01                        ; Stop sprite
        data -1
 *// graphics_mode
 
@@ -302,22 +367,39 @@ init_vdp_ram:
        li   r1,bmp
        li   r2,>2000
        bl   @vmbw
-;*      Load palette
-;       li  r0,>2fc0                   ; Reg 47, DPM = 1, AUTO INC = 1
-;       li  r1,PAL0
-;       bl   @vwtr
-;       li  r2,16                      ; 16 bytes per palette
-;*      Every two bytes written to the VDP now go to the palette registers
-;load_palette_loop:
-;       movb *r1+,*r15
-;       dec  r2
-;       jne  load_palette_loop
-;*      Exit DPM
-;       li   r0,>2f00                   ; Reg 47, DPM = 1, AUTO INC = 0
-;       bl   @vwtr
+*      Load palette
+       li  r0,>2fc0                    ; Reg 47, DPM = 1, AUTO INC = 1
+       li  r1,palette
+       bl   @vwtr
+       li  r2,32                       ; 32 bytes for 16 colors
+load_palette_loop:
+;       movb *r1+,*r15                  ; Every two bytes written to the VDP now go to the palette registers
+       dec  r2
+       jne  load_palette_loop
+       li   r0,>2f00                   ; Reg 47, DPM = 0, AUTO INC = 0
+       bl   @vwtr
+*      Name table
+       li   r0,name_table
+       li   r1,>2000
+       li   r2,screen_size_char
+       bl   @vsmw
 *      Tile attributes
        li   r0,tile_attr_table
-       li   r1,>0100
+       li   r1,>0100                   ; Use palette 1
+       li   r2,>100
+       bl   @vsmw
+*      Sprite patterns
+       li   r0,sprite_pattern_table
+       li   r1,S0_0
+       li   r2,32
+       bl   @vmbw
+       li   r0,sprite_pattern_table_p1
+       li   r1,S1_0
+       li   r2,32
+       bl   @vmbw
+*      Sprites off
+       li   r0,sprite_attr_table
+       li   r1,>f000
        bl   @vsbw
 *      GPU program
        li   r0,gpu_program_tmp
@@ -329,10 +411,6 @@ init_vdp_ram:
        li   r1,gpu_data_start
        li   r2,gpu_data_end-gpu_data_start
        bl   @vmbw
-*      Sprites off
-       li   r0,sprite_attr_table
-       li   r1,>d000
-       bl   @vsbw
        .endproc
 *// init_vdp_ram
 
@@ -437,6 +515,12 @@ lower_memory_max:
 * Data
 *
        aorg >a000
+
+palette:
+       DATA >0000,>0000,>00B0,>00F0
+       DATA >0008,>000F,>0700,>00FF
+       DATA >0C00,>0F00,>0BB0,>0FF0
+       DATA >0060,>0C0B,>0CCC,>0FFF
 
 ***************************************************************************
 *

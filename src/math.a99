@@ -6,17 +6,19 @@
 * r2: Multiplier (FP 8.8)
 *
 * On return r1 contains multiplied value
+* Modifies r3.
 *
 mpy_fp88:
        clr  r3                         ; Sign (0 means positive)
        mov  r1,r1                      ; Test sign
+       jeq  mpy_fp88_3
        jgt  mpy_fp88_1
        neg  r1                         ; Make positive
        inv  r3                         ; Flip sign (-1 means negative)
 mpy_fp88_1:
        mov  r2,r2                      ; Test sign
        jgt  mpy_fp88_2
-       neg  r12                        ; Make positive
+       neg  r2                         ; Make positive
        inv  r3                         ; Flip sign
 mpy_fp88_2:
        mpy  r2,r1                      ; Multiply the numbers
@@ -24,7 +26,7 @@ mpy_fp88_2:
        swpb r1                         ; And the LSB of r1 (whole number) in reverse order
        mov  r3,r3                      ; Test sign
        jeq  mpy_fp88_3                 ; Jump if sign positive
-       neg  r1                         ; Nagate result
+       neg  r1                         ; Negate result
 mpy_fp88_3:
        rt
 *// mpy_fp88

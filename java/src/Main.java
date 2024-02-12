@@ -2,8 +2,8 @@ public class Main {
     public static void main(String[] args) {
         System.out.println("z_table:");
         double scale = 0x100;
-        double horizon = 2;
-        double yWorld = 16;
+        double horizon = 1;
+        double yWorld = 8;
         for (int yScreen = 63, n = 0; yScreen >= 0; yScreen--, n++) {
             double z = yWorld / (yScreen + horizon);
             String hex = toHex((int) Math.round(z * scale), 4);
