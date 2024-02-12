@@ -12,6 +12,8 @@
 **
 * Constants
 *
+debug:
+       equ  1
 screen_width_char:
        equ  32
 screen_height_char:
@@ -144,11 +146,13 @@ loop:
        bl   @vsync
        bl   @wait_gpu
 *      Upload bitmap
+       .ifeq debug,1
        li   r0,bitmap_src
        bl   @vwad
        li   r1,bmp
        li   r2,>2000/8
        bl   @vdp_copy_pad
+       .endif
 *      x
        mov  @x,r1
        li   r0,gpu_x

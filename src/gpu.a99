@@ -60,7 +60,9 @@ draw_bitmap_1:
        call @gpu_mpy_fp88
        mov  r7,r14                     ; dy * scale
        s    r8,r3                      ; y -= 64 * dy * scale
+       .ifeq debug,1
        call @plot
+       .endif
 draw_bitmap_2:
 *      Left destination pixel
        mov  r2,r9                      ; XXXXXXXX.xxxxxxxx
@@ -105,11 +107,13 @@ draw_bitmap_4a:
        dec  r6
        jne  draw_bitmap_2
 *      Next row
+       .ifeq debug,1
        call @plot
+       .endif
        pop  r3                         ; Restore y
+       pop  r2                         ; Restore x
        sla  r13,1                      ; dx * scale / 2
        s    r13,r3                     ; y -= dx * scale / 2
-       pop  r2                         ; Restore x
        sla  r14,1                      ; dy * scale / 2
        a    r14,r2                     ; x += dy * scale / 2
        ai   r4,-bitmap_width           ; Move destination 2 lines up
@@ -196,14 +200,14 @@ plot_2:
 *********************************************************************
 *
 scale_table:
-       data >0020,>0021,>0021,>0022,>0022,>0023,>0023,>0024
-       data >0025,>0025,>0026,>0027,>0027,>0028,>0029,>002a
-       data >002b,>002c,>002d,>002e,>002f,>0030,>0031,>0032
-       data >0033,>0035,>0036,>0037,>0039,>003b,>003c,>003e
-       data >0040,>0042,>0044,>0047,>0049,>004c,>004f,>0052
-       data >0055,>0059,>005d,>0062,>0066,>006c,>0072,>0078
-       data >0080,>0089,>0092,>009e,>00ab,>00ba,>00cd,>00e4
-       data >0100,>0125,>0155,>019a,>0200,>02ab,>0400,>0800
+       data >0020,>0020,>0020,>0020,>0021,>0021,>0021,>0022
+       data >0022,>0023,>0023,>0024,>0025,>0025,>0026,>0027
+       data >0028,>0029,>002a,>002b,>002d,>002e,>002f,>0031
+       data >0032,>0034,>0035,>0037,>0039,>003a,>003c,>003e
+       data >0040,>0042,>0044,>0046,>0049,>004b,>004d,>0050
+       data >0052,>0055,>0057,>005a,>005d,>005f,>0062,>0065
+       data >0068,>006b,>006e,>0071,>0075,>0078,>007b,>007f
+       data >0082,>0086,>0089,>008d,>0091,>0094,>0098,>009c
 
 gpu_prg_high_end:
        equ  $
