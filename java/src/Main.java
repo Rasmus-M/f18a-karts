@@ -19,10 +19,10 @@ public class Main {
 
     private static void generateScaleTable2() {
         System.out.println("scale_table:");
-        double start = 0x0020;
-        double factor = 0.0;
+        double start = 0x0030;
+        double factor = 0.5;
         for (int yScreen = 0; yScreen < 64; yScreen++) {
-            double value = start + yScreen * factor + (yScreen * yScreen) / 32.0;
+            double value = start + yScreen * factor + (yScreen * yScreen) / 18.0;
             String hex = toHex((int) Math.round(value), 4);
             System.out.print((yScreen % 8 == 0 ? "       data " : "") + hex + (yScreen % 8 == 7 ? "\n" : ","));
         }
