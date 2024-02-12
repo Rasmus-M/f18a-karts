@@ -143,6 +143,12 @@ main:
 loop:
        bl   @vsync
        bl   @wait_gpu
+*      Upload bitmap
+       li   r0,bitmap_src
+       bl   @vwad
+       li   r1,bmp
+       li   r2,>2000/8
+       bl   @vdp_copy_pad
 *      x
        mov  @x,r1
        li   r0,gpu_x
