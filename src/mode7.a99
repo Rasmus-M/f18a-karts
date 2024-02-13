@@ -95,7 +95,7 @@ pad:
        equ  >8300
 wrksp:
        equ  pad                        ; Workspace
-lsb_r0:
+r0lb:
        equ  wrksp+1
 r1lb:
        equ  wrksp+3
@@ -121,8 +121,24 @@ padvar:                                ; Start of pad variables
        equ  one+2
 frame:
        equ padvar
-vdp_copy_pad:
+x:                                     ; FP 8.8
        equ  frame+2
+y:                                     ; FP 8.8
+       equ  x+2
+vx:                                    ; FP 8.8
+       equ  y+2
+vy:                                    ; FP 8.8
+       equ  vx+2
+dx:                                    ; FP 8.8
+       equ  vy+2
+dy:                                    ; FP 8.8
+       equ  dx+2
+angle:                                 ; 0 - 255
+       equ  dy+2
+speed:                                  ; FP 8.8
+       equ  angle+2
+vdp_copy_pad:
+       equ  speed+2
 pad_max:
        equ  vdp_copy_pad+22
 
@@ -142,6 +158,11 @@ main:
        bl   @vwtr
        li   r0,gpu_program_tmp%256+>3700
        bl   @vwtr
+*      Init
+       li   r0,init_data
+       li   r1,x
+       li   r2,16
+       bl   @copy
 loop:
        bl   @vsync
        bl   @wait_gpu
@@ -159,8 +180,6 @@ loop:
        bl   @vsww
        mov  @angle,r1
        bl   @cos
-       mov  @zoom,r2
-       bl   @mpy_fp88
        mov  r1,@dx
        li   r0,gpu_dx
        bl   @vsww
@@ -170,8 +189,6 @@ loop:
        bl   @vsww
        mov  @angle,r1
        bl   @sin
-       mov  @zoom,r2
-       bl   @mpy_fp88
        mov  r1,@dy
        li   r0,gpu_dy
        bl   @vsww
@@ -180,22 +197,21 @@ loop:
        bl   @vwtr
 *      Update parameters
        bl   @user_input
+       bl   @move
 *      Display sprites
        bl   @display_sprites
 *      loop
        jmp  loop
-x:                                     ; FP 8.8
-       data >8000
-y:                                     ; FP 8.8
-       data >4000
-dx:                                    ; FP 8.8
-       data ->0100
-dy:                                    ; FP 8.8
-       data >0000
-angle:                                 ; 0 - 255
-       data 0
-zoom:                                  ; FP 8.8
-       data >0080
+
+init_data:
+       data >8000                      ; x
+       data >4000                      ; y
+       data >0000                      ; vx
+       data >0000                      ; vy
+       data >0000                      ; dx
+       data >0000                      ; dy
+       data 0                          ; angle
+       data 0                          ; speed
 
 *********************************************************************
 *
@@ -235,45 +251,75 @@ user_input:
        clr  r1
        li   r0,JOY_FI
        bl   @check_key
-       jeq  user_input_0
+       jeq  user_input_1
        inc  r1
-user_input_0:
+user_input_1:
 *      Left
        tb   1
-       jeq  user_input_1
+       jeq  user_input_3
        abs  r1
-       jne  user_input_0a
-       dec  @angle
-       jmp  user_input_1
-user_input_0a:
+       jne  user_input_2
+       dect @angle
+       jmp  user_input_3
+user_input_2:
        s    @dx,@x
        s    @dy,@y
-user_input_1:
+user_input_3:
 *      Right
        tb   2
-       jeq  user_input_2
+       jeq  user_input_5
        abs  r1
-       jne  user_input_1a
-       inc  @angle
-       jmp  user_input_2
-user_input_1a:
+       jne  user_input_4
+       inct @angle
+       jmp  user_input_5
+user_input_4:
        a    @dx,@x
        a    @dy,@y
-user_input_2:
-*      Forward
-       tb   3
-       jeq  user_input_3
-       s    @dy,@x
-       a    @dx,@y
-user_input_3:
+user_input_5:
 *      Backward
+       tb   3
+       jeq  user_input_7
+       mov  @speed,r0
+       ci   r0,-62
+       jlt  user_input_6
+       dec  r0
+user_input_6:
+       mov  r0,@speed
+user_input_7:
+*      Forward
        tb   4
-       jeq  user_input_4
-       a    @dy,@x
-       s    @dx,@y
-user_input_4:
+       jeq  user_input_9
+       mov  @speed,r0
+       ci   r0,62
+       jgt  user_input_8
+       inc  r0
+user_input_8:
+       mov  r0,@speed
+user_input_9:
        .endproc
 *// user_input
+
+*********************************************************************************
+*
+* Move
+*
+move:
+       .proc
+       mov  @dy,r1
+       mov  @speed,r2
+       sla  r2,4
+       bl   @mpy_fp88
+       mov  r1,@vx
+       a    @vx,@x
+       mov  @dx,r1
+       neg  r1
+       mov  @speed,r2
+       sla  r2,4
+       bl   @mpy_fp88
+       mov  r1,@vy
+       a    @vy,@y
+       .endproc
+*// move
 
 *********************************************************************************
 *
@@ -525,6 +571,17 @@ check_key:
        tb   0                          ; Test key, EQ if not pressed
        rt
 *// check_key
+
+***************************************************************************
+*
+* CPU memory copy
+*
+copy:
+       mov  *r0+,*r1+
+       dect r2
+       jne  copy
+       rt
+*// copy
 
 ***************************************************************************
 *

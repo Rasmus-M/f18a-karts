@@ -24,7 +24,7 @@ public class Main {
         double b = 0.0;
         double c = 0x0030;
         for (int yScreen = 0; yScreen < 64; yScreen++) {
-            double value = a * yScreen * yScreen + b * yScreen + c;
+            double value = 0.5 * (a * yScreen * yScreen + b * yScreen + c);
             String hex = toHex((int) Math.round(value), 4);
             System.out.print((yScreen % 8 == 0 ? "       data " : "") + hex + (yScreen % 8 == 7 ? "\n" : ","));
         }
