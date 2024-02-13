@@ -2,6 +2,7 @@ public class Main {
 
     public static void main(String[] args) {
         generateScaleTable2();
+        // generateDepthTable();
     }
 
     private static void generateScaleTable() {
@@ -19,12 +20,28 @@ public class Main {
 
     private static void generateScaleTable2() {
         System.out.println("scale_table:");
-        double start = 0x0030;
-        double factor = 0.0;
+        double a = 1.0 / 18;
+        double b = 0.0;
+        double c = 0x0030;
         for (int yScreen = 0; yScreen < 64; yScreen++) {
-            double value = start + yScreen * factor + (yScreen * yScreen) / 18.0;
+            double value = a * yScreen * yScreen + b * yScreen + c;
             String hex = toHex((int) Math.round(value), 4);
             System.out.print((yScreen % 8 == 0 ? "       data " : "") + hex + (yScreen % 8 == 7 ? "\n" : ","));
+        }
+        System.out.println();
+    }
+
+    // Calculates yScreen^2 + yScreen
+    private static void generateDepthTable() {
+        System.out.println("z_table:");
+        double ddz = 2;
+        double dz = 0;
+        double z = 0;
+        for (int yScreen = 0; yScreen < 64; yScreen++) {
+            String hex = toHex((int) Math.round(z), 4);
+            System.out.print((yScreen % 8 == 0 ? "       data " : "") + hex + (yScreen % 8 == 7 ? "\n" : ","));
+            dz += ddz;
+            z += dz;
         }
         System.out.println();
     }

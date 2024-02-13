@@ -13,7 +13,7 @@
 * Constants
 *
 debug:
-       equ  1
+       equ  0
 screen_width_char:
        equ  32
 screen_height_char:
@@ -243,7 +243,7 @@ user_input_0:
        jeq  user_input_1
        abs  r1
        jne  user_input_0a
-       dect @angle
+       dec  @angle
        jmp  user_input_1
 user_input_0a:
        s    @dx,@x
@@ -254,7 +254,7 @@ user_input_1:
        jeq  user_input_2
        abs  r1
        jne  user_input_1a
-       inct @angle
+       inc  @angle
        jmp  user_input_2
 user_input_1a:
        a    @dx,@x
@@ -562,7 +562,11 @@ gpu_data_start:
 gpu_data_end:
        equ  $
 bmp:
+       .ifeq debug,1
+       bcopy "bitmap-debug.bin"
+       .else
        bcopy "bitmap.bin"
+       .endif
 
 upper_memory_max:
        equ  $
