@@ -24,20 +24,30 @@ screen_width:
        equ  screen_width_char*8
 screen_height:
        equ  screen_height_char*8
+background_image_top_char:
+       equ  2
+background_image_height_char:
+       equ  4
 bitmap_top:
-       equ  40
+       equ  (background_image_top_char+background_image_height_char)*8
 bitmap_width:
        equ  128
 bitmap_dst_height:
-       equ  64
+       equ  63
+bitmap_gap_top:
+       equ  bitmap_top+bitmap_dst_height
 bitmap_gap_height:
-       equ  8
+       equ  1
 bitmap_src_top:
-       equ  bitmap_top+bitmap_dst_height+bitmap_gap_height
+       equ  bitmap_gap_top+bitmap_gap_height
 bitmap_src_height:
        equ  128
 bitmap_height:
        equ  bitmap_dst_height+bitmap_gap_height+bitmap_src_height
+n_char_patterns:
+       equ  10
+n_sprite_patterns:
+       equ  2
 
 **
 * Memory mapped addresses
@@ -65,9 +75,9 @@ gpu_program_tmp:
        equ  >0000
 bitmap_base:
        equ  >0000
-bitmap_dst:                            ; 128 x 192 x 4 bbp = 12K
+bitmap_dst:                            ; 128 x 200 x 4 bbp = 12.5K
        equ  bitmap_base
-bitmap_gap:
+bitmap_gap:                            ; 512 bytes
        equ  bitmap_base + (bitmap_dst_height * bitmap_width / 2)
 bitmap_src:
        equ  bitmap_gap + (bitmap_gap_height * bitmap_width / 2)
@@ -83,6 +93,8 @@ pattern_table:                         ; Pattern table
        equ  >3800
 sprite_pattern_table:                  ; Sprite pattern table
        equ  >3800
+pattern_table_p1:                      ; Pattern table plane 1
+       equ  >3c00
 sprite_pattern_table_p1:               ; Sprite pattern table plane 1
        equ  >3c00
 gpu_program:
@@ -200,6 +212,8 @@ loop:
        bl   @move
 *      Display sprites
        bl   @display_sprites
+*      Scroll background
+       bl   @scroll_background
 *      loop
        jmp  loop
 
@@ -307,14 +321,14 @@ move:
        .proc
        mov  @dy,r1
        mov  @speed,r2
-       sla  r2,4
+       sla  r2,2
        bl   @mpy_fp88
        mov  r1,@vx
        a    @vx,@x
        mov  @dx,r1
        neg  r1
        mov  @speed,r2
-       sla  r2,4
+       sla  r2,2
        bl   @mpy_fp88
        mov  r1,@vy
        a    @vy,@y
@@ -329,6 +343,25 @@ display_sprites:
        .proc
        li   r0,sprite_attr_table
        bl   @vwad
+*      Kart left
+       li   r1,>5e70
+       mov  r1,*r15
+       swpb r1
+       mov  r1,*r15
+       li   r1,>1404
+       mov  r1,*r15
+       swpb r1
+       mov  r1,*r15
+*      Kart right
+       li   r1,>5e80
+       mov  r1,*r15
+       swpb r1
+       mov  r1,*r15
+       li   r1,>1444
+       mov  r1,*r15
+       swpb r1
+       mov  r1,*r15
+*      Cross hair on source map
        mov  @y,r1
        andi r1,>7f00
        ai   r1,->0800
@@ -337,12 +370,26 @@ display_sprites:
        mov  @x,r1
        ai   r1,->0800
        movb r1,*r15
-       li   r1,>0000
+       li   r1,>1000
        movb r1,*r15
        swpb r1
        movb r1,*r15
        .endproc
 *// display_sprites
+
+*********************************************************************************
+*
+* Scroll background
+*
+scroll_background:
+       .proc
+       mov  @angle,r0
+       sla  r0,2
+       andi r0,>00ff
+       ori  r0,>1b00
+       bl   @vwtr
+       .endproc
+*// scroll_background
 
 *********************************************************************************
 *
@@ -423,7 +470,7 @@ vregs2:
        byte >23,>00                        ; Bitmap width
        byte >24,bitmap_height              ; Bitmap height
        byte >31,>6a                        ; ROW30, ECM2 tiles + sprites, real y coord
-       byte >33,>01                        ; Stop sprite
+       byte >33,>03                        ; Stop sprite
        data -1
 *// graphics_mode
 
@@ -443,35 +490,48 @@ init_vdp_ram:
        li   r1,bmp
        li   r2,>2000
        bl   @vmbw
+       li   r0,bitmap_gap
+       li   r1,>1100
+       li   r2,64
+       bl   @vsmw
 *      Load palette
        li  r0,>2fc0                    ; Reg 47, DPM = 1, AUTO INC = 1
-       li  r1,palette
+       li  r1,PAL0
        bl   @vwtr
-       li  r2,32                       ; 32 bytes for 16 colors
+       li  r2,128                      ; 128 bytes for 64 colors
 load_palette_loop:
-;       movb *r1+,*r15                  ; Every two bytes written to the VDP now go to the palette registers
+       movb *r1+,*r15                  ; Every two bytes written to the VDP now go to the palette registers
        dec  r2
        jne  load_palette_loop
        li   r0,>2f00                   ; Reg 47, DPM = 0, AUTO INC = 0
        bl   @vwtr
 *      Name table
-       li   r0,name_table
-       li   r1,>2000
-       li   r2,screen_size_char
-       bl   @vsmw
+       li   r0,name_table+(background_image_top_char*screen_width_char)
+       li   r1,MD0
+       li   r2,background_image_height_char*screen_width_char
+       bl   @vmbw
 *      Tile attributes
        li   r0,tile_attr_table
-       li   r1,>0100                   ; Use palette 1
-       li   r2,>100
-       bl   @vsmw
-*      Sprite patterns
-       li   r0,sprite_pattern_table
-       li   r1,S0_0
-       li   r2,32
+       li   r1,TAT0                    ; Use palette 1
+       li   r2,n_char_patterns
        bl   @vmbw
-       li   r0,sprite_pattern_table_p1
-       li   r1,S1_0
-       li   r2,32
+*      Character patterns
+       li   r0,pattern_table
+       li   r1,P0_0
+       li   r2,n_char_patterns*8
+       bl   @vmbw
+       li   r0,pattern_table_p1
+       li   r1,P1_0
+       li   r2,n_char_patterns*8
+       bl   @vmbw
+*      Sprite patterns
+       li   r0,16*8+sprite_pattern_table
+       li   r1,S0_16
+       li   r2,n_sprite_patterns*32
+       bl   @vmbw
+       li   r0,16*8+sprite_pattern_table_p1
+       li   r1,S1_16
+       li   r2,n_sprite_patterns*32
        bl   @vmbw
 *      Sprites off
        li   r0,sprite_attr_table
