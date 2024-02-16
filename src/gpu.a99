@@ -40,6 +40,8 @@ gpu_loop:
 *
 draw_bitmap:
 *      Init
+;       sla  r0,1                       ; Adjust so that >0100 corresponds to scale 1
+;       sla  r1,1                       ; Disabled for 3D not to waste bits
        li   r11,>0200                  ; x bit determining left or right pixel
        li   r4,bitmap_dst + (bitmap_dst_height - 1) * (bitmap_width / 2)
        clr  r5                         ; Row index * 2, bottom row = 0
@@ -112,10 +114,10 @@ draw_bitmap_4a:
        .endif
        pop  r3                         ; Restore y
        pop  r2                         ; Restore x
-       sla  r13,2                      ; dx * scale / 2
-       s    r13,r3                     ; y -= dx * scale / 2
-       sla  r14,2                      ; dy * scale / 2
-       a    r14,r2                     ; x += dy * scale / 2
+       sla  r14,2                      ; stepX = dy * scale / 2 * y-compression (8)
+       a    r14,r2                     ; x += stepX
+       sla  r13,2                      ; stepY = dx * scale / 2 * y-compression (8)
+       s    r13,r3                     ; y -= stepY
        ai   r4,-bitmap_width           ; Move destination 2 lines up
        inct r5
        ci   r5,bitmap_dst_height*2

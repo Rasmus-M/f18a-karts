@@ -32,6 +32,7 @@ public class Main {
         return sb;
     }
 
+    // 2nd degree polynomial
     private static double scaleFunc1(int yScreen) {
         double x = yScreen + 8;
         double a = 1.0 / 16;
@@ -40,11 +41,13 @@ public class Main {
         return a * Math.pow(x, 2) + b * x + c;
     }
 
+    // 1 / x
     private static double scaleFunc2(int yScreen) {
         double x = 64 - yScreen;
         return 2048.0 / x;
     }
 
+    // 3rd degree polynomial
     private static double scaleFunc3(int yScreen) {
         double x = yScreen + 24;
         double a = 1.0 / 32;
@@ -53,9 +56,20 @@ public class Main {
         return a * Math.pow(0.25 * x, 3) + b * x + c;
     }
 
+    // Exponential
     private static double scaleFunc4(int yScreen) {
         double x = yScreen + 66;
         return Math.pow(1.05, x);
+    }
+
+    // Linear
+    private static double scaleFunc5(int yScreen) {
+        return 16.0 + yScreen * 2;
+    }
+
+    // Constant
+    private static double scaleFunc6(int yScreen) {
+        return 256.0;
     }
 
     private static String toHex(int n, int len) {
