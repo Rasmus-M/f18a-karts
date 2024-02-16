@@ -217,16 +217,6 @@ loop:
 *      loop
        jmp  loop
 
-init_data:
-       data >8000                      ; x
-       data >4000                      ; y
-       data >0000                      ; vx
-       data >0000                      ; vy
-       data >0000                      ; dx
-       data >0000                      ; dy
-       data 0                          ; angle
-       data 0                          ; speed
-
 *********************************************************************
 *
 * Wait for vertical retrace (CRU)
@@ -294,7 +284,7 @@ user_input_5:
        tb   3
        jeq  user_input_7
        mov  @speed,r0
-       ci   r0,-62
+       ci   r0,-40
        jlt  user_input_6
        dec  r0
 user_input_6:
@@ -304,7 +294,7 @@ user_input_7:
        tb   4
        jeq  user_input_9
        mov  @speed,r0
-       ci   r0,62
+       ci   r0,40
        jgt  user_input_8
        inc  r0
 user_input_8:
@@ -663,11 +653,15 @@ lower_memory_max:
 *
        aorg >a000
 
-palette:
-       DATA >0000,>0000,>00B0,>00F0
-       DATA >0008,>000F,>0700,>00FF
-       DATA >0C00,>0F00,>0BB0,>0FF0
-       DATA >0060,>0C0B,>0CCC,>0FFF
+init_data:
+       data >a000                      ; x
+       data >1000                      ; y
+       data >0000                      ; vx
+       data >0000                      ; vy
+       data >0000                      ; dx
+       data >0000                      ; dy
+       data 192                        ; angle
+       data 0                          ; speed
 
 ***************************************************************************
 *
@@ -675,12 +669,12 @@ palette:
 *
        copy "data.a99"
 gpu_data_start:
-       copy "gpu_data.a99"
+       copy "gpu-data.a99"
 gpu_data_end:
        equ  $
 bmp:
        .ifeq debug,1
-       bcopy "bitmap-debug.bin"
+       bcopy "bitmap.bin"
        .else
        bcopy "bitmap.bin"
        .endif

@@ -1,49 +1,56 @@
+import java.io.FileWriter;
+import java.io.IOException;
+
 public class Main {
 
     public static void main(String[] args) {
-        generateScaleTable2();
-        // generateDepthTable();
-    }
-
-    private static void generateScaleTable() {
-        System.out.println("scale_table:");
-        double scale = 0x100;
-        double horizon = 1;
-        double yWorld = 8;
-        for (int yScreen = 63, n = 0; yScreen >= 0; yScreen--, n++) {
-            double z = yWorld / (yScreen + horizon);
-            String hex = toHex((int) Math.round(z * scale), 4);
-            System.out.print((n % 8 == 0 ? "       data " : "") + hex + (n % 8 == 7 ? "\n" : ","));
+        StringBuilder sb = generateScaleTable();
+        try {
+            saveScaleTable(sb);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-        System.out.println();
     }
 
-    private static void generateScaleTable2() {
-        System.out.println("scale_table:");
-        double a = 1.0 / 18;
-        double b = 0.0;
-        double c = 0x0030;
+    private static StringBuilder generateScaleTable() {
+        StringBuilder sb = new StringBuilder("scale_table:\n");
+        StringBuilder sums = new StringBuilder();
+        double sum = 0;
         for (int yScreen = 0; yScreen < 64; yScreen++) {
-            double value = 0.5 * (a * yScreen * yScreen + b * yScreen + c);
+            double value = scaleFunc1(yScreen);
             String hex = toHex((int) Math.round(value), 4);
-            System.out.print((yScreen % 8 == 0 ? "       data " : "") + hex + (yScreen % 8 == 7 ? "\n" : ","));
+            sb.append(yScreen % 8 == 0 ? "       data " : "").append(hex).append(yScreen % 8 == 7 ? "\n" : ",");
+            double oldSum = sum;
+            sum += value;
+            if (oldSum > 0) {
+                sums.append(sum / oldSum).append("\n");
+            }
         }
-        System.out.println();
+        sb.append("\n");
+        System.out.println(sb);
+        // System.out.println(sums);
+        return sb;
     }
 
-    // Calculates yScreen^2 + yScreen
-    private static void generateDepthTable() {
-        System.out.println("z_table:");
-        double ddz = 2;
-        double dz = 0;
-        double z = 0;
-        for (int yScreen = 0; yScreen < 64; yScreen++) {
-            String hex = toHex((int) Math.round(z), 4);
-            System.out.print((yScreen % 8 == 0 ? "       data " : "") + hex + (yScreen % 8 == 7 ? "\n" : ","));
-            dz += ddz;
-            z += dz;
-        }
-        System.out.println();
+    private static double scaleFunc1(int yScreen) {
+        double x = yScreen + 8;
+        double a = 1.0 / 16;
+        double b = 0;
+        double c = 0x0020;
+        return a * Math.pow(x, 2) + b * x + c;
+    }
+
+    private static double scaleFunc2(int yScreen) {
+        double x = 64 - yScreen;
+        return 0x0020 + 400 / (x + 8);
+    }
+
+    private static double scaleFunc3(int yScreen) {
+        double x = yScreen + 24;
+        double a = 1.0 / 32;
+        double b = 0;
+        double c = 0x0020;
+        return a * Math.pow(0.25 * x, 3) + b * x + c;
     }
 
     private static String toHex(int n, int len) {
@@ -57,5 +64,11 @@ public class Main {
             hex = hex.substring(hex.length() - len);
         }
         return ">" + hex;
+    }
+
+    private static void saveScaleTable(StringBuilder sb) throws IOException {
+        FileWriter fw = new FileWriter("src/scale-table.a99");
+        fw.write(sb.toString());
+        fw.close();
     }
 }

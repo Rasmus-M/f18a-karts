@@ -260,10 +260,10 @@ CC:1|0
 CC:1|0
 CC:1|0
 * PALETTES
-PL:ffd4e8ff|ff000000|ff21c842|ff5edc78
-PL:ff5455ed|ff7d76fc|ffd4524d|ff42ebf5
-PL:fffc5554|ffff7978|ffd4c154|ffe6ce80
-PL:ff21b03b|ffc95bba|ffcccccc|ffffffff
+PL:ff777777|ff000000|ff00bb00|ff00ff00
+PL:ff000088|ff0000ff|ff770000|ff00ffff
+PL:ffcc0000|ffff0000|ffbbbb00|ffffff00
+PL:ff006600|ffcc00bb|ffcccccc|ffffffff
 PL:ff3399ff|ff666666|ffcccccc|ff000000
 PL:ff5455ed|ff7d76fc|ffd4524d|ff42ebf5
 PL:fffc5554|ffff7978|ffd4c154|ffe6ce80

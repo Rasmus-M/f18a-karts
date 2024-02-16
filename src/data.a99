@@ -1,10 +1,10 @@
 ****************************************
 * Colorset Definitions                  
 ****************************************
-PAL0   DATA >0CEF,>0000,>02C4,>06D7    ;
-PAL1   DATA >055E,>077F,>0C55,>04EE    ;
-PAL2   DATA >0F55,>0F77,>0CB5,>0EC8    ;
-PAL3   DATA >02A3,>0C5B,>0CCC,>0FFF    ;
+PAL0   DATA >0777,>0000,>00B0,>00F0    ;
+PAL1   DATA >0008,>000F,>0700,>00FF    ;
+PAL2   DATA >0C00,>0F00,>0BB0,>0FF0    ;
+PAL3   DATA >0060,>0C0B,>0CCC,>0FFF    ;
 PAL4   DATA >039F,>0666,>0CCC,>0000    ;
 PAL5   DATA >055E,>077F,>0C55,>04EE    ;
 PAL6   DATA >0F55,>0F77,>0CB5,>0EC8    ;
