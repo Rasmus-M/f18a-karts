@@ -48,6 +48,8 @@ n_char_patterns:
        equ  10
 n_sprite_patterns:
        equ  2
+max_speed:
+       equ  64
 
 **
 * Memory mapped addresses
@@ -280,21 +282,21 @@ user_input_4:
        a    @dx,@x
        a    @dy,@y
 user_input_5:
-*      Backward
+*      Backwards
        tb   3
        jeq  user_input_7
        mov  @speed,r0
-       ci   r0,-40
+       ci   r0,-(max_speed-1)
        jlt  user_input_6
        dec  r0
 user_input_6:
        mov  r0,@speed
 user_input_7:
-*      Forward
+*      Forwards
        tb   4
        jeq  user_input_9
        mov  @speed,r0
-       ci   r0,40
+       ci   r0,max_speed-1
        jgt  user_input_8
        inc  r0
 user_input_8:
