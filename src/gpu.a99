@@ -56,16 +56,20 @@ draw_bitmap_1:
        call @gpu_mpy_fp88              ; Calculate dx * scale
        mov  r7,r13                     ; stepX = dx * scale
        call @gpu_mpy_fp214             ; Calculate 64 * stepX in r8
-       s    r8,r2                      ; x -= 64 * stepX
-       s    r8,r3                      ; y -= 64 * stepX
+       s    r8,r2                      ; x -= 64 * stepX (move to left)
+       s    r8,r3                      ; y -= 64 * stepX (move forward)
+       sra  r8,1                       ; 32 * stepX
+       s    r8,r3                      ; y -= 32 * stepX
 *      Scale y
        mov  r1,r7                      ; dy
        mov  @scale_table(r5),r8        ; z
        call @gpu_mpy_fp88              ; Calculate dy * scale
-       mov  r7,r14                     ; stepY = dy * (z + s0)
+       mov  r7,r14                     ; stepY = dy * scale
        call @gpu_mpy_fp214             ; Calculate 64 * stepY in r8
-       a    r8,r2                      ; x += 64 * stepY
-       s    r8,r3                      ; y -= 64 * stepY
+       s    r8,r3                      ; y -= 64 * stepY (move to left)
+       a    r8,r2                      ; x += 64 * stepY (move forward)
+       sra  r8,1                       ; 32 * stepY
+       a    r8,r3                      ; x += 32 * stepY
        .ifeq debug,1
        call @plot
        .endif

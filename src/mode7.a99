@@ -265,7 +265,11 @@ user_input_1:
        jeq  user_input_3
        abs  r1
        jne  user_input_2
-       dect @angle
+       dec  @angle
+       mov  @speed,r0
+       ci   r0,max_speed/2
+       jlt  user_input_3
+       dec  @angle
        jmp  user_input_3
 user_input_2:
        s    @dx,@x
@@ -276,7 +280,11 @@ user_input_3:
        jeq  user_input_5
        abs  r1
        jne  user_input_4
-       inct @angle
+       inc @angle
+       mov  @speed,r0
+       ci   r0,max_speed/2
+       jlt  user_input_5
+       inc  @angle
        jmp  user_input_5
 user_input_4:
        a    @dx,@x
