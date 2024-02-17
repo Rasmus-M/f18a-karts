@@ -44,7 +44,7 @@ public class Main {
     // 1 / x
     private static double scaleFunc2(int yScreen) {
         double x = 64 - yScreen;
-        return 2048.0 / x;
+        return 1024.0 / x;
     }
 
     // 3rd degree polynomial

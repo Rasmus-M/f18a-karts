@@ -50,35 +50,21 @@ draw_bitmap_1:
        li   r6,bitmap_width/2          ; Column counter
        push r2                         ; Save x
        push r3                         ; Save y
-*      Row start x
-       mov  r1,r7                      ; dy
-       mov  @scale_table(r5),r8        ; z
-       s    @scale_table,r8
-       call @gpu_mpy_fp88              ; z * dy
-       sla  r7,6
-       a    r7,r2                      ; x -= z * dy
-*      Row start y
+*      Scale x
        mov  r0,r7                      ; dx
-       mov  @scale_table(r5),r8        ; z
-       s    @scale_table,r8
-       call @gpu_mpy_fp88              ; z * dx
-       sla  r7,6
-       s    r7,r3                      ; y += z * dx
-*      Row scale x
-       mov  r0,r7                      ; dx
-       mov  @scale_table(r5),r8        ; z
-;       sla  r8,2
-       call @gpu_mpy_fp88
-       mov  r7,r13                     ; stepX = dx * (z + s0)
-       call @gpu_mpy_fp214
+       mov  @scale_table(r5),r8        ; scale
+       call @gpu_mpy_fp88              ; Calculate dx * scale
+       mov  r7,r13                     ; stepX = dx * scale
+       call @gpu_mpy_fp214             ; Calculate 64 * stepX in r8
        s    r8,r2                      ; x -= 64 * stepX
-*      Row scale y
+       s    r8,r3                      ; y -= 64 * stepX
+*      Scale y
        mov  r1,r7                      ; dy
        mov  @scale_table(r5),r8        ; z
-;       sla  r8,2
-       call @gpu_mpy_fp88
+       call @gpu_mpy_fp88              ; Calculate dy * scale
        mov  r7,r14                     ; stepY = dy * (z + s0)
-       call @gpu_mpy_fp214
+       call @gpu_mpy_fp214             ; Calculate 64 * stepY in r8
+       a    r8,r2                      ; x += 64 * stepY
        s    r8,r3                      ; y -= 64 * stepY
        .ifeq debug,1
        call @plot

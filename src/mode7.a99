@@ -336,7 +336,7 @@ display_sprites:
        li   r0,sprite_attr_table
        bl   @vwad
 *      Kart left
-       li   r1,>5e70
+       li   r1,>4e60
        mov  r1,*r15
        swpb r1
        mov  r1,*r15
@@ -345,7 +345,7 @@ display_sprites:
        swpb r1
        mov  r1,*r15
 *      Kart right
-       li   r1,>5e80
+       li   r1,>4e80
        mov  r1,*r15
        swpb r1
        mov  r1,*r15
@@ -356,11 +356,11 @@ display_sprites:
 *      Cross hair on source map
        mov  @y,r1
        andi r1,>7f00
-       ai   r1,->0800
+       ai   r1,->1000
        ai   r1,bitmap_src_top*256
        movb r1,*r15
        mov  @x,r1
-       ai   r1,->0800
+       ai   r1,->1000
        movb r1,*r15
        li   r1,>1000
        movb r1,*r15
@@ -447,7 +447,7 @@ vregs2:
        byte >39,>1c                        ; Unlock F18A
        byte >39,>1c                        ; Unlock F18A
        byte >00,>00                        ; Graphics I mode
-       byte >01,>e2                        ; 16K, display on, interrupts enabled
+       byte >01,>e3                        ; 16K, display on, interrupts enabled
        byte >02,name_table/>400            ; Name table
        byte >03,tile_attr_table/>40        ; Tile attribute table
        byte >04,pattern_table/>800         ; Pattern table
