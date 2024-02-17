@@ -676,7 +676,7 @@ gpu_data_end:
        equ  $
 bmp:
        .ifeq debug,1
-       bcopy "bitmap.bin"
+       bcopy "bitmap-debug.bin"
        .else
        bcopy "bitmap.bin"
        .endif
