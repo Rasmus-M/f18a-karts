@@ -17,7 +17,7 @@ public class Main {
         StringBuilder sums = new StringBuilder();
         double sum = 0;
         for (int yScreen = 0; yScreen < 64; yScreen++) {
-            double value = scaleFunc4(yScreen);
+            double value = scaleFunc2(yScreen);
             String hex = toHex((int) Math.round(value), 4);
             sb.append(yScreen % 8 == 0 ? "       data " : "").append(hex).append(yScreen % 8 == 7 ? "\n" : ",");
             double oldSum = sum;

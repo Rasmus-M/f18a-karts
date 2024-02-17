@@ -42,26 +42,44 @@ draw_bitmap:
 *      Init
 ;       sla  r0,1                       ; Adjust so that >0100 corresponds to scale 1
 ;       sla  r1,1                       ; Disabled for 3D not to waste bits
-       li   r11,>0200                  ; x bit determining left or right pixel
        li   r4,bitmap_dst + (bitmap_dst_height - 1) * (bitmap_width / 2)
        clr  r5                         ; Row index * 2, bottom row = 0
        clr  r10
+       li   r11,>0200                  ; x bit determining left or right pixel
 draw_bitmap_1:
        li   r6,bitmap_width/2          ; Column counter
        push r2                         ; Save x
        push r3                         ; Save y
-*      Scale row x
-       mov  r0,r7                      ; dx
-       mov  @scale_table(r5),r8        ; scale
-       call @gpu_mpy_fp88
-       mov  r7,r13                     ; dx * scale
-       s    r8,r2                      ; x -= 64 * dx * scale
-*      Scale row y
+*      Row start x
        mov  r1,r7                      ; dy
-       mov  @scale_table(r5),r8        ; scale
+       mov  @scale_table(r5),r8        ; z
+       s    @scale_table,r8
+       call @gpu_mpy_fp88              ; z * dy
+       sla  r7,6
+       a    r7,r2                      ; x -= z * dy
+*      Row start y
+       mov  r0,r7                      ; dx
+       mov  @scale_table(r5),r8        ; z
+       s    @scale_table,r8
+       call @gpu_mpy_fp88              ; z * dx
+       sla  r7,6
+       s    r7,r3                      ; y += z * dx
+*      Row scale x
+       mov  r0,r7                      ; dx
+       mov  @scale_table(r5),r8        ; z
+;       sla  r8,2
        call @gpu_mpy_fp88
-       mov  r7,r14                     ; dy * scale
-       s    r8,r3                      ; y -= 64 * dy * scale
+       mov  r7,r13                     ; stepX = dx * (z + s0)
+       call @gpu_mpy_fp214
+       s    r8,r2                      ; x -= 64 * stepX
+*      Row scale y
+       mov  r1,r7                      ; dy
+       mov  @scale_table(r5),r8        ; z
+;       sla  r8,2
+       call @gpu_mpy_fp88
+       mov  r7,r14                     ; stepY = dy * (z + s0)
+       call @gpu_mpy_fp214
+       s    r8,r3                      ; y -= 64 * stepY
        .ifeq debug,1
        call @plot
        .endif
@@ -82,8 +100,8 @@ draw_bitmap_3:
        andi r10,>f000
 draw_bitmap_3a:
 *      Move x and y to next pixel
-       a    r13,r2                     ; x += dx * scale
-       a    r14,r3                     ; y += dy * scale
+       a    r13,r2                     ; x += stepX
+       a    r14,r3                     ; y += stepY
 *      Right destination pixel
        mov  r2,r9                      ; XXXXXXXX.xxxxxxxx
        swpb r9                         ; 00000000.XXXXXXXX
@@ -100,8 +118,8 @@ draw_bitmap_4:
        andi r12,>0f00
 draw_bitmap_4a:
 *      Move x and y to next pixel
-       a    r13,r2                     ; x += dx * scale
-       a    r14,r3                     ; y += dy * scale
+       a    r13,r2                     ; x += stepX
+       a    r14,r3                     ; y += stepY
 *      Write to destination
        socb r12,r10                    ; Combine left and right pixels
        movb r10,*r4+                   ; Write byte to destination
@@ -114,10 +132,6 @@ draw_bitmap_4a:
        .endif
        pop  r3                         ; Restore y
        pop  r2                         ; Restore x
-       sla  r14,2                      ; stepX = dy * scale / 2 * y-compression (8)
-       a    r14,r2                     ; x += stepX
-       sla  r13,2                      ; stepY = dx * scale / 2 * y-compression (8)
-       s    r13,r3                     ; y -= stepY
        ai   r4,-bitmap_width           ; Move destination 2 lines up
        inct r5
        ci   r5,bitmap_dst_height*2
@@ -156,14 +170,21 @@ gpu_mpy_fp88_2:
        neg  r7                         ; Negate result
        neg  r8
 gpu_mpy_fp88_3:
-*      Construct result as FP 2.14 in r8
+       ret
+*// gpu_mpy_fp88
+
+*********************************************************************
+*
+* Construct result from gpu_mpy_fp88 as FP 2.14 in r8
+*
+gpu_mpy_fp214:
        mov  r7,r9                      ; 77777777.88888888
        sla  r9,6                       ; 77888888.88000000
        sra  r8,2                       ; 00888888.88888888
        andi r8,>003f                   ; 00000000.00888888
        soc  r9,r8                      ; 77888888.88888888
        ret
-*// gpu_mpy_fp88
+*// gpu_mpy_fp214
 
 *********************************************************************
 *
