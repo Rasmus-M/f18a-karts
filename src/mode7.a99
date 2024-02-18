@@ -93,8 +93,6 @@ sprite_attr_table:                     ; Sprite attribute table = >3000
        equ  >3180
 graphics_data_1:                       ; >600 bytes for scaled sprites
        equ  >3200
-barrel_sprite:                         ; 192 bytes
-       equ  graphics_data_1
 pattern_table:                         ; Pattern table
        equ  >3800
 sprite_pattern_table:                  ; Sprite pattern table
@@ -722,9 +720,12 @@ bmp:
        .endif
 
 gfx_data_1:
+       byte 12,32                      ; width, height
        bcopy "barrel.bin"
 gfx_data_1_end:
        equ  $
+barrel_sprite:                         ; 194 bytes
+       equ  graphics_data_1
 
 upper_memory_max:
        equ  $

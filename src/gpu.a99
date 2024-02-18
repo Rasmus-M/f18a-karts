@@ -52,9 +52,8 @@ draw_bitmap_1:
 *      Scale x
        mov  r0,r7                      ; nx
        mov  @scale_table(r5),r8        ; scale
-       call @gpu_mpy_fp88              ; Calculate nx * scale
+       call @gpu_mpy_fp88              ; Calculate nx * scale in r7 and 64 * nx * scale in r8
        mov  r7,r13                     ; stepX = nx * scale
-       call @gpu_mpy_fp214             ; Calculate 64 * stepX in r8
        s    r8,r2                      ; x -= 64 * stepX (move to left)
        s    r8,r3                      ; y -= 64 * stepX (move forward)
 ;       sra  r8,1                       ; 32 * stepX
@@ -62,9 +61,8 @@ draw_bitmap_1:
 *      Scale y
        mov  r1,r7                      ; ny
        mov  @scale_table(r5),r8        ; scale
-       call @gpu_mpy_fp88              ; Calculate ny * scale
+       call @gpu_mpy_fp88              ; Calculate ny * scale and 64 * nx * scale in r8
        mov  r7,r14                     ; stepY = ny * scale
-       call @gpu_mpy_fp214             ; Calculate 64 * stepY in r8
        s    r8,r3                      ; y -= 64 * stepY (move to left)
        a    r8,r2                      ; x += 64 * stepY (move forward)
 ;       sra  r8,1                       ; 32 * stepY
@@ -130,18 +128,29 @@ draw_bitmap_4a:
 
 *********************************************************************
 *
-* Draw a scaled sprite on the bitmap
+* Draw a sprite as seen from (@gpu_x, 2gpu_y)
+* looking in the direction (@gpu_dx, @gpu_dy)
 *
-* r0: Address of sprite graphics data
-* r1:
-* r2: Center x in source map coordinates x (FP 8.8, XXXXXXXX.xxxxxxxx).
-*     Values of 0-255 are within bounds of source map (each wide pixel has two positions).
-* r3: Bottom y in source map coordinates y (FP 8.8, YYYYYYYY.yyyyyyyy).
-*     Values of 0-127 are within bounds of source map.
+* r0: Address of sprite graphics data (width, height, bitmap)
+* r2: Center x position in source map coordinates
+* r3: Bottom y position in source map coordinates
 *
 draw_sprite:
-       nop
-*// draw_sprite
+       ret
+*// draw sprite
+
+*********************************************************************
+*
+* Draw a scaled sprite on the destination bitmap
+*
+* r0: Address of sprite graphics data (width, height, bitmap)
+* r1: Scale (FP 8.8)
+* r2: x position (top left corner) in destination map coordinates (FP 8.8, -128 - 127).
+* r3: y position (top left corner) in destination map coordinates (FP 8.8, -128 - 127).
+*
+draw_scaled_sprite:
+       ret
+*// draw_scaled_sprite
 
 *********************************************************************
 *
@@ -174,21 +183,14 @@ gpu_mpy_fp88_2:
        neg  r7                         ; Negate result
        neg  r8
 gpu_mpy_fp88_3:
-       ret
-*// gpu_mpy_fp88
-
-*********************************************************************
-*
-* Construct result from gpu_mpy_fp88 as FP 2.14 in r8
-*
-gpu_mpy_fp214:
+*      Construct 64 times result in r8
        mov  r7,r9                      ; 77777777.88888888
        sla  r9,6                       ; 77888888.88000000
        sra  r8,2                       ; 00888888.88888888
        andi r8,>003f                   ; 00000000.00888888
        soc  r9,r8                      ; 77888888.88888888
        ret
-*// gpu_mpy_fp214
+*// gpu_mpy_fp88
 
 *********************************************************************
 *
@@ -197,6 +199,7 @@ gpu_mpy_fp214:
 * r2: x (FP 8.8)
 * r3: y (FP 8.8)
 *
+       .ifeq debug,1
 plot:
        push r9
        push r10
@@ -222,6 +225,7 @@ plot_2:
        pop  r10
        pop  r9
        ret
+       .endif
 *// plot
 
 *********************************************************************
