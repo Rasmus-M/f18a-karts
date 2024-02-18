@@ -18,19 +18,20 @@ gpu_prg_high_start:
        li   r15,>47fe                  ; Stack pointer
 gpu_loop:
        idle
-       mov  @gpu_dx,r0
-       mov  @gpu_dy,r1
-       mov  @gpu_x,r2
-       mov  @gpu_y,r3
+       mov  @gpu_dy,r0                 ; nx = dy
+       neg  r0                         ; nx = -dy
+       mov  @gpu_dx,r1                 ; ny = dx
+       mov  @gpu_x,r2                  ; x
+       mov  @gpu_y,r3                  ; y
        call @draw_bitmap
        jmp  gpu_loop
 
 *********************************************************************************
 *
-* Draw bitmap
+* Draw a rotated, scaled, bitmap
 *
-* r0: dx is the x-coordinate of the vector that's added to the source map position each step (FP 8.8)
-* r1: dy is the y-coordinate of the vector that's added to the source map position each step (FP 8.8)
+* r0: nx is the x-coordinate of the vector orthogonal to the direction vector (FP 8.8)
+* r1: ny is the y-coordinate of the vector orthogonal to the direction vector (FP 8.8)
 * r2: Center x in source map coordinates x (FP 8.8, XXXXXXXX.xxxxxxxx).
 *     Values of 0-255 are within bounds of source map (each wide pixel has two positions).
 * r3: Bottom y in source map coordinates y (FP 8.8, YYYYYYYY.yyyyyyyy).
@@ -40,36 +41,34 @@ gpu_loop:
 *
 draw_bitmap:
 *      Init
-;       sla  r0,1                       ; Adjust so that >0100 corresponds to scale 1
-;       sla  r1,1                       ; Disabled for 3D not to waste bits
-       li   r4,bitmap_dst + (bitmap_dst_height - 1) * (bitmap_width / 2)
+       li   r4,bitmap_dst + (bitmap_dst_height - 1) * (bitmap_width / 2) ; Destination address (bottom row)
        clr  r5                         ; Row index * 2, bottom row = 0
-       clr  r10
-       li   r11,>0200                  ; x bit determining left or right pixel
+       clr  r10                        ; For the destination byte (2 pixels)
+       li   r11,>0200                  ; Bit in x determining left or right pixel
 draw_bitmap_1:
        li   r6,bitmap_width/2          ; Column counter
        push r2                         ; Save x
        push r3                         ; Save y
 *      Scale x
-       mov  r0,r7                      ; dx
+       mov  r0,r7                      ; nx
        mov  @scale_table(r5),r8        ; scale
-       call @gpu_mpy_fp88              ; Calculate dx * scale
-       mov  r7,r13                     ; stepX = dx * scale
+       call @gpu_mpy_fp88              ; Calculate nx * scale
+       mov  r7,r13                     ; stepX = nx * scale
        call @gpu_mpy_fp214             ; Calculate 64 * stepX in r8
        s    r8,r2                      ; x -= 64 * stepX (move to left)
        s    r8,r3                      ; y -= 64 * stepX (move forward)
-       sra  r8,1                       ; 32 * stepX
-       s    r8,r3                      ; y -= 32 * stepX
+;       sra  r8,1                       ; 32 * stepX
+;       s    r8,r3                      ; y -= 32 * stepX (move further forward, enable for more narrow angle)
 *      Scale y
-       mov  r1,r7                      ; dy
-       mov  @scale_table(r5),r8        ; z
-       call @gpu_mpy_fp88              ; Calculate dy * scale
-       mov  r7,r14                     ; stepY = dy * scale
+       mov  r1,r7                      ; ny
+       mov  @scale_table(r5),r8        ; scale
+       call @gpu_mpy_fp88              ; Calculate ny * scale
+       mov  r7,r14                     ; stepY = ny * scale
        call @gpu_mpy_fp214             ; Calculate 64 * stepY in r8
        s    r8,r3                      ; y -= 64 * stepY (move to left)
        a    r8,r2                      ; x += 64 * stepY (move forward)
-       sra  r8,1                       ; 32 * stepY
-       a    r8,r3                      ; x += 32 * stepY
+;       sra  r8,1                       ; 32 * stepY
+;       a    r8,r3                      ; x += 32 * stepY (move further forward, enable for more narrow angle)
        .ifeq debug,1
        call @plot
        .endif
@@ -80,14 +79,14 @@ draw_bitmap_2:
        movb r3,r9                      ; YYYYYYYY.XXXXXXXX
        sla  r9,1                       ; YYYYYYYX.XXXXXXX0
        srl  r9,3                       ; 000YYYYY.YYXXXXXX
-       movb @bitmap_src(r9),r10
+       movb @bitmap_src(r9),r10        ; Get 2 source pixels
 *      Isolate pixel in left nybble
        coc  r11,r2                     ; Left or right pixel?
        jne  draw_bitmap_3
        sla  r10,4                      ; Move right pixel into position
        jmp  draw_bitmap_3a
 draw_bitmap_3:
-       andi r10,>f000
+       andi r10,>f000                  ; Isolate left pixel
 draw_bitmap_3a:
 *      Move x and y to next pixel
        a    r13,r2                     ; x += stepX
@@ -98,23 +97,23 @@ draw_bitmap_3a:
        movb r3,r9                      ; YYYYYYYY.XXXXXXXX
        sla  r9,1                       ; YYYYYYYX.XXXXXXX0
        srl  r9,3                       ; 000YYYYY.YYXXXXXX
-       movb @bitmap_src(r9),r12
+       movb @bitmap_src(r9),r12        ; Get 2 source pixels
 *      Isolate pixel in right nybble
        coc  r11,r2                     ; Left or right pixel?
        jeq  draw_bitmap_4
        srl  r12,4                      ; Move left pixel into position
        jmp  draw_bitmap_4a
 draw_bitmap_4:
-       andi r12,>0f00
+       andi r12,>0f00                  ; Isolate right pixel
 draw_bitmap_4a:
 *      Move x and y to next pixel
        a    r13,r2                     ; x += stepX
        a    r14,r3                     ; y += stepY
 *      Write to destination
        socb r12,r10                    ; Combine left and right pixels
-       movb r10,*r4+                   ; Write byte to destination
+       movb r10,*r4+                   ; Write byte (2 pixels) to destination
 *      Next column
-       dec  r6
+       dec  r6                         ; Column counter
        jne  draw_bitmap_2
 *      Next row
        .ifeq debug,1
@@ -123,11 +122,26 @@ draw_bitmap_4a:
        pop  r3                         ; Restore y
        pop  r2                         ; Restore x
        ai   r4,-bitmap_width           ; Move destination 2 lines up
-       inct r5
+       inct r5                         ; Row index * 2
        ci   r5,bitmap_dst_height*2
        jne  draw_bitmap_1
        ret
 *// draw_bitmap
+
+*********************************************************************
+*
+* Draw a scaled sprite on the bitmap
+*
+* r0: Address of sprite graphics data
+* r1:
+* r2: Center x in source map coordinates x (FP 8.8, XXXXXXXX.xxxxxxxx).
+*     Values of 0-255 are within bounds of source map (each wide pixel has two positions).
+* r3: Bottom y in source map coordinates y (FP 8.8, YYYYYYYY.yyyyyyyy).
+*     Values of 0-127 are within bounds of source map.
+*
+draw_sprite:
+       nop
+*// draw_sprite
 
 *********************************************************************
 *

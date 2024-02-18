@@ -83,23 +83,31 @@ bitmap_gap:                            ; 512 bytes
        equ  bitmap_base + (bitmap_dst_height * bitmap_width / 2)
 bitmap_src:
        equ  bitmap_gap + (bitmap_gap_height * bitmap_width / 2)
-sprite_attr_table:                     ; Sprite attribute table
-       equ  >3200
-gpu_data:
-       equ  >3280
+name_table:                            ; Name table (note: we only need 6 rows of this)
+       equ  bitmap_src + (bitmap_src_height * bitmap_width / 2) ; = >3000
+gpu_data:                              ; Data shared between CPU and GPU
+       equ  >30C0
 tile_attr_table:                       ; Tile attribute table
-       equ  >3300
-name_table:                            ; Name table (note: we probably only need 4-6 rows of this)
-       equ  >3400
+       equ  >3100
+sprite_attr_table:                     ; Sprite attribute table = >3000
+       equ  >3180
+graphics_data_1:                       ; >600 bytes for scaled sprites
+       equ  >3200
+barrel_sprite:                         ; 192 bytes
+       equ  graphics_data_1
 pattern_table:                         ; Pattern table
        equ  >3800
 sprite_pattern_table:                  ; Sprite pattern table
        equ  >3800
+graphics_data_2:                       ; >300 bytes for scaled sprites
+       equ  >3900
 pattern_table_p1:                      ; Pattern table plane 1
        equ  >3c00
 sprite_pattern_table_p1:               ; Sprite pattern table plane 1
        equ  >3c00
-gpu_program:
+graphics_data_3:                       ; >300 bytes for scaled sprites
+       equ  >3d00
+gpu_program:                           ; Approx. >600 bytes for scaled sprites
        equ  >4000
 
 **
@@ -139,17 +147,17 @@ x:                                     ; FP 8.8
        equ  frame+2
 y:                                     ; FP 8.8
        equ  x+2
-vx:                                    ; FP 8.8
+vx:                                    ; Velocity vector x (FP 8.8)
        equ  y+2
-vy:                                    ; FP 8.8
+vy:                                    ; Velocity vector y (FP 8.8)
        equ  vx+2
-dx:                                    ; FP 8.8
+dx:                                    ; Direction vector x (FP 8.8)
        equ  vy+2
-dy:                                    ; FP 8.8
+dy:                                    ; Direction vector y (FP 8.8)
        equ  dx+2
-angle:                                 ; 0 - 255
+angle:                                 ; 0 - 255, higher values rotates clockwise
        equ  dy+2
-speed:                                  ; FP 8.8
+speed:                                 ; -max_speed - max_speed
        equ  angle+2
 vdp_copy_pad:
        equ  speed+2
@@ -168,10 +176,7 @@ main:
        li   r15,vdpwd
        bl   @one_time_init
 *      Run GPU program, which moves it into high GPU RAM
-       li   r0,gpu_program_tmp/256+>3600
-       bl   @vwtr
-       li   r0,gpu_program_tmp%256+>3700
-       bl   @vwtr
+       bl   @run_gpu
 *      Init
        li   r0,init_data
        li   r1,x
@@ -180,43 +185,20 @@ main:
 loop:
        bl   @vsync
        bl   @wait_gpu
-*      Upload bitmap
+       bl   @trigger_gpu
+       bl   @display_sprites
+       bl   @scroll_background
+       bl   @user_input
+       bl   @calculate_directional_vector
+       bl   @move
        .ifeq debug,1
+*      Upload bitmap again
        li   r0,bitmap_src
        bl   @vwad
        li   r1,bmp
        li   r2,>2000/8
        bl   @vdp_copy_pad
        .endif
-*      x
-       mov  @x,r1
-       li   r0,gpu_x
-       bl   @vsww
-       mov  @angle,r1
-       bl   @cos
-       mov  r1,@dx
-       li   r0,gpu_dx
-       bl   @vsww
-*      y
-       mov  @y,r1
-       li   r0,gpu_y
-       bl   @vsww
-       mov  @angle,r1
-       bl   @sin
-       mov  r1,@dy
-       li   r0,gpu_dy
-       bl   @vsww
-*      Trigger GPU
-       li   r0,>3801
-       bl   @vwtr
-*      Update parameters
-       bl   @user_input
-       bl   @move
-*      Display sprites
-       bl   @display_sprites
-*      Scroll background
-       bl   @scroll_background
-*      loop
        jmp  loop
 
 *********************************************************************
@@ -236,6 +218,19 @@ vsync_1:
 
 *********************************************************************************
 *
+* Run GPU program
+*
+run_gpu:
+       .proc
+       li   r0,gpu_program_tmp/256+>3600
+       bl   @vwtr
+       li   r0,gpu_program_tmp%256+>3700
+       bl   @vwtr
+       .endproc
+*// run_gpu
+
+*********************************************************************************
+*
 * Wait for the GPU to be idle
 *
 wait_gpu:
@@ -247,6 +242,44 @@ wait_gpu_1:
        jlt  wait_gpu_1
        .endproc
 *// wait_gpu
+
+*********************************************************************************
+*
+* Resume GPU after idle
+*
+trigger_gpu:
+       .proc
+       li   r0,>3801
+       bl   @vwtr
+       .endproc
+*// wait_gpu
+
+*********************************************************************************
+*
+* Calculate directional vector
+*
+calculate_directional_vector:
+       .proc
+*      dx
+       mov  @x,r1
+       li   r0,gpu_x
+       bl   @vsww
+       mov  @angle,r1
+       bl   @cos
+       mov  r1,@dx
+       li   r0,gpu_dx
+       bl   @vsww
+*      dy
+       mov  @y,r1
+       li   r0,gpu_y
+       bl   @vsww
+       mov  @angle,r1
+       bl   @sin
+       mov  r1,@dy
+       li   r0,gpu_dy
+       bl   @vsww
+       .endproc
+*// calculate_directional_vector
 
 *********************************************************************************
 *
@@ -262,9 +295,7 @@ user_input:
 user_input_1:
 *      Left
        tb   1
-       jeq  user_input_3
-       abs  r1
-       jne  user_input_2
+       jeq  user_input_2
        dec  @angle
        mov  @speed,r0
        ci   r0,max_speed/2
@@ -272,44 +303,39 @@ user_input_1:
        dec  @angle
        jmp  user_input_3
 user_input_2:
-       s    @dx,@x
-       s    @dy,@y
-user_input_3:
 *      Right
        tb   2
-       jeq  user_input_5
-       abs  r1
-       jne  user_input_4
+       jeq  user_input_3
        inc @angle
        mov  @speed,r0
        ci   r0,max_speed/2
-       jlt  user_input_5
+       jlt  user_input_3
        inc  @angle
-       jmp  user_input_5
-user_input_4:
-       a    @dx,@x
-       a    @dy,@y
-user_input_5:
+user_input_3:
 *      Backwards
+       abs  r1
+       jne  user_input_4
        tb   3
-       jeq  user_input_7
+       jeq  user_input_6
+user_input_4:
        mov  @speed,r0
        ci   r0,-(max_speed-1)
-       jlt  user_input_6
+       jlt  user_input_5
        dec  r0
-user_input_6:
+user_input_5:
        mov  r0,@speed
-user_input_7:
+       jmp  user_input_8
+user_input_6:
 *      Forwards
        tb   4
-       jeq  user_input_9
+       jeq  user_input_8
        mov  @speed,r0
        ci   r0,max_speed-1
-       jgt  user_input_8
+       jgt  user_input_7
        inc  r0
-user_input_8:
+user_input_7:
        mov  r0,@speed
-user_input_9:
+user_input_8:
        .endproc
 *// user_input
 
@@ -319,19 +345,20 @@ user_input_9:
 *
 move:
        .proc
+*      x
+       mov  @dx,r1
+       mov  @speed,r2
+       sla  r2,2
+       bl   @mpy_fp88
+       mov  r1,@vx                     ; vx = dx * speed
+       a    @vx,@x                     ; x += vx
+*      y
        mov  @dy,r1
        mov  @speed,r2
        sla  r2,2
        bl   @mpy_fp88
-       mov  r1,@vx
-       a    @vx,@x
-       mov  @dx,r1
-       neg  r1
-       mov  @speed,r2
-       sla  r2,2
-       bl   @mpy_fp88
-       mov  r1,@vy
-       a    @vy,@y
+       mov  r1,@vy                     ; vy = dy * speed
+       a    @vy,@y                     ; y += vy
        .endproc
 *// move
 
@@ -343,7 +370,7 @@ display_sprites:
        .proc
        li   r0,sprite_attr_table
        bl   @vwad
-*      Kart left
+*      Kart left sprite
        li   r1,>4e60
        mov  r1,*r15
        swpb r1
@@ -352,7 +379,7 @@ display_sprites:
        mov  r1,*r15
        swpb r1
        mov  r1,*r15
-*      Kart right
+*      Kart right sprite
        li   r1,>4e80
        mov  r1,*r15
        swpb r1
@@ -361,7 +388,7 @@ display_sprites:
        mov  r1,*r15
        swpb r1
        mov  r1,*r15
-*      Cross hair on source map
+*      Marker on source map
        mov  @y,r1
        andi r1,>7f00
        ai   r1,->1000
@@ -547,6 +574,11 @@ load_palette_loop:
        li   r1,gpu_data_start
        li   r2,gpu_data_end-gpu_data_start
        bl   @vmbw
+*      Graphics data
+       li   r0,graphics_data_1
+       li   r1,gfx_data_1
+       li   r2,gfx_data_1_end-gfx_data_1
+       bl   @vmbw
        .endproc
 *// init_vdp_ram
 
@@ -668,9 +700,9 @@ init_data:
        data >1000                      ; y
        data >0000                      ; vx
        data >0000                      ; vy
-       data >0000                      ; dx
+       data ->0100                     ; dx
        data >0000                      ; dy
-       data 192                        ; angle
+       data 128                        ; angle
        data 0                          ; speed
 
 ***************************************************************************
@@ -688,6 +720,11 @@ bmp:
        .else
        bcopy "bitmap.bin"
        .endif
+
+gfx_data_1:
+       bcopy "barrel.bin"
+gfx_data_1_end:
+       equ  $
 
 upper_memory_max:
        equ  $
