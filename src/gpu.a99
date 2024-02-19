@@ -24,6 +24,12 @@ gpu_loop:
        mov  @gpu_x,r2                  ; x
        mov  @gpu_y,r3                  ; y
        call @draw_bitmap
+       li   r0,barrel_sprite
+       li   r1,>1000
+       li   r2,>1000
+       li   r3,>0100
+       li   r4,>0100
+       call @draw_scaled_sprite
        jmp  gpu_loop
 
 *********************************************************************************
@@ -54,26 +60,24 @@ draw_bitmap_1:
        mov  @scale_table(r5),r8        ; scale
        call @gpu_mpy_fp88              ; Calculate nx * scale in r7 and 64 * nx * scale in r8
        mov  r7,r13                     ; stepX = nx * scale
-       s    r8,r2                      ; x -= 64 * stepX (move to left)
-       s    r8,r3                      ; y -= 64 * stepX (move forward)
-;       sra  r8,1                       ; 32 * stepX
-;       s    r8,r3                      ; y -= 32 * stepX (move further forward, enable for more narrow angle)
+       sla  r7,6
+       s    r7,r2                      ; x -= 64 * stepX (move to left)
+       s    r7,r3                      ; y -= 64 * stepX (move forward)
 *      Scale y
        mov  r1,r7                      ; ny
        mov  @scale_table(r5),r8        ; scale
        call @gpu_mpy_fp88              ; Calculate ny * scale and 64 * nx * scale in r8
        mov  r7,r14                     ; stepY = ny * scale
-       s    r8,r3                      ; y -= 64 * stepY (move to left)
-       a    r8,r2                      ; x += 64 * stepY (move forward)
-;       sra  r8,1                       ; 32 * stepY
-;       a    r8,r3                      ; x += 32 * stepY (move further forward, enable for more narrow angle)
+       sla  r7,6
+       s    r7,r3                      ; y -= 64 * stepY (move to left)
+       a    r7,r2                      ; x += 64 * stepY (move forward)
        .ifeq debug,1
        call @plot
        .endif
 draw_bitmap_2:
 *      Left destination pixel
        mov  r2,r9                      ; XXXXXXXX.xxxxxxxx
-       swpb r9                         ; 00000000.XXXXXXXX
+       swpb r9                         ; xxxxxxxx.XXXXXXXX
        movb r3,r9                      ; YYYYYYYY.XXXXXXXX
        sla  r9,1                       ; YYYYYYYX.XXXXXXX0
        srl  r9,3                       ; 000YYYYY.YYXXXXXX
@@ -91,7 +95,7 @@ draw_bitmap_3a:
        a    r14,r3                     ; y += stepY
 *      Right destination pixel
        mov  r2,r9                      ; XXXXXXXX.xxxxxxxx
-       swpb r9                         ; 00000000.XXXXXXXX
+       swpb r9                         ; xxxxxxxx.XXXXXXXX
        movb r3,r9                      ; YYYYYYYY.XXXXXXXX
        sla  r9,1                       ; YYYYYYYX.XXXXXXX0
        srl  r9,3                       ; 000YYYYY.YYXXXXXX
@@ -120,7 +124,7 @@ draw_bitmap_4a:
        pop  r3                         ; Restore y
        pop  r2                         ; Restore x
        ai   r4,-bitmap_width           ; Move destination 2 lines up
-       inct r5                         ; Row index * 2
+       inct r5                         ; Next row index * 2
        ci   r5,bitmap_dst_height*2
        jne  draw_bitmap_1
        ret
@@ -132,8 +136,8 @@ draw_bitmap_4a:
 * looking in the direction (@gpu_dx, @gpu_dy)
 *
 * r0: Address of sprite graphics data (width, height, bitmap)
-* r2: Center x position in source map coordinates
-* r3: Bottom y position in source map coordinates
+* r1: Center x position in source map coordinates
+* r2: Bottom y position in source map coordinates
 *
 draw_sprite:
        ret
@@ -141,27 +145,104 @@ draw_sprite:
 
 *********************************************************************
 *
-* Draw a scaled sprite on the destination bitmap
+* Draw a scaled sprite on the destination bitmap.
+* Doesn't do any clipping yet!
 *
 * r0: Address of sprite graphics data (width, height, bitmap)
-* r1: Scale (FP 8.8)
-* r2: x position (top left corner) in destination map coordinates (FP 8.8, -128 - 127).
-* r3: y position (top left corner) in destination map coordinates (FP 8.8, -128 - 127).
+*     width: in pixels (2 pixels per fat pixel) (FP 8.8)
+*     height: in pixels (FP 8.8)
+*     bitmap: row by row of bytes packed with 2 fat pixels
+* r1: x position (top left corner) in destination map coordinates (FP 8.8)
+* r2: y position (top left corner) in destination map coordinates (FP 8.8)
+* r3: Scale x (FP 8.8)
+* r4: Scale y (FP 8.8)
 *
 draw_scaled_sprite:
+*      Destination address
+       swpb r2                         ; yyyyyyyy.YYYYYYYY
+       movb r1,r2                      ; XXXXXXXX.YYYYYYYY
+       swpb r2                         ; YYYYYYYY.XXXXXXXX
+       sla  r2,2                       ; YYYYYYXX.XXXXXX00
+       srl  r2,4                       ; 000YYYYY.YYXXXXXX
+       ai   r2,bitmap_dst
+*      Init
+       mov  *r0+,r5                    ; Sprite bitmap width
+       mov  *r0+,r6                    ; Sprite bitmap height
+       clr  r9                         ; For the source byte (2 pixels)
+       clr  r10                        ; For the destination byte (2 pixels)
+       li   r11,>0200                  ; Bit in x determining left or right pixel
+       clr  r8                         ; Source bitmap y
+draw_scaled_sprite_1:
+       clr  r7                         ; Source bitmap x
+       push r0
+       mov  r8,r9                      ; y
+       mpy  r5,r9                      ; y * width
+       srl  r9,2                       ; / 4 (since width is in normal pixels there are 4 pixels per byte)
+       a    r9,r0                      ; Add to source address
+       push r2
+draw_scaled_sprite_2:
+       mov  r7,r9
+       srl  r9,10                      ; To byte offset
+       a    r0,r9                      ; Add source address of row
+       movb *r9,r9                     ; Get source byte
+       movb *r2,r10                    ; Get existing destination byte
+       coc  r11,r7                     ; Left or right source pixel?
+       jeq  draw_scaled_sprite_4
+*      Left source pixel
+       coc  r11,r1
+       jeq  draw_scaled_sprite_3
+*      Left source, left destination
+       andi r9,>f000
+       andi r10,>0f00
+       jmp  draw_scaled_sprite_6
+draw_scaled_sprite_3:
+*      Left source, right destination
+       andi r9,>f000
+       srl  r9,4
+       andi r10,>f000
+       jmp  draw_scaled_sprite_6
+draw_scaled_sprite_4:
+*      Right source pixel
+       coc  r11,r1
+       jeq  draw_scaled_sprite_5
+*      Right source, left destination
+       andi r9,>0f00
+       sla  r9,4
+       andi r10,>0f00
+       jmp  draw_scaled_sprite_6
+draw_scaled_sprite_5:
+*      Right source, right destination
+       andi r9,>0f00
+       andi r10,>f000
+draw_scaled_sprite_6:
+       socb r9,r10
+       movb r10,*r2
+       coc  r11,r1
+       jne  draw_scaled_sprite_7
+       inc  r2
+draw_scaled_sprite_7:
+       inv  r1
+       a    r3,r7                      ; x += scale x
+       c    r7,r5                      ; x > width ?
+       jlt  draw_scaled_sprite_2
+       pop  r2
+       ai   r2,bitmap_width/2          ; Next destination row
+       pop  r0
+       a    r4,r8                      ; y += scale y
+       c    r8,r6                      ; y > height ?
+       jlt  draw_scaled_sprite_1
        ret
 *// draw_scaled_sprite
 
 *********************************************************************
 *
-* Fixed point 8.8 multiplication
+* Signed, fixed point 8.8 multiplication
 *
 * r7: Multiplicand (FP 8.8)
 * r8: Multiplier (FP 8.8)
 *
-* On return r7 contains multiplied value as FP 8.8.
-* r8 contains the multiplied value as FP 2.14,
-* or times 64 with more decimals.
+* On return r7 contains the product as FP 8.8.
+* Modifies r9.
 *
 gpu_mpy_fp88:
        clr  r9                         ; Sign (0 means positive)
@@ -181,14 +262,7 @@ gpu_mpy_fp88_2:
        mov  r9,r9                      ; Test sign
        jeq  gpu_mpy_fp88_3             ; Jump if sign positive
        neg  r7                         ; Negate result
-       neg  r8
 gpu_mpy_fp88_3:
-*      Construct 64 times result in r8
-       mov  r7,r9                      ; 77777777.88888888
-       sla  r9,6                       ; 77888888.88000000
-       sra  r8,2                       ; 00888888.88888888
-       andi r8,>003f                   ; 00000000.00888888
-       soc  r9,r8                      ; 77888888.88888888
        ret
 *// gpu_mpy_fp88
 

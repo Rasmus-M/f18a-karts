@@ -181,8 +181,9 @@ main:
        li   r2,16
        bl   @copy
 loop:
-       bl   @vsync
        bl   @wait_gpu
+       bl   @vsync
+       bl   @vsync
        bl   @trigger_gpu
        bl   @display_sprites
        bl   @scroll_background
@@ -238,6 +239,8 @@ wait_gpu:
 wait_gpu_1:
        movb @vdpsta,r0
        jlt  wait_gpu_1
+       li   r0,>0f00
+       bl   @vwtr
        .endproc
 *// wait_gpu
 
@@ -720,11 +723,11 @@ bmp:
        .endif
 
 gfx_data_1:
-       byte 12,32                      ; width, height
+       data >1800,>2000                ; width in pixels (2 pixels per fat pixel), height in pixels
        bcopy "barrel.bin"
 gfx_data_1_end:
        equ  $
-barrel_sprite:                         ; 194 bytes
+barrel_sprite:                         ; 196 bytes
        equ  graphics_data_1
 
 upper_memory_max:
