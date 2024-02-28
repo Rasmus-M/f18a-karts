@@ -12,5 +12,20 @@ gpu_dx:
 gpu_dy:
        data >0000
 
+gpu_sprite_data:
+       equ  0
+gpu_sprite_x:
+       equ  2
+gpu_sprite_y:
+       equ  4
+gpu_sprite_size:
+       equ  6
+
+gpu_sprites:
+       data barrel_sprite
+       data >9000                      ; x
+       data >1000                      ; y
+       data 0                          ; end
+
        aorg
 

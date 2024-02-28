@@ -24,13 +24,25 @@ gpu_loop:
        mov  @gpu_x,r2                  ; x
        mov  @gpu_y,r3                  ; y
        call @draw_bitmap
-       li   r0,barrel_sprite
-       li   r1,>1000
-       li   r2,>1000
-       li   r3,>0100
-       li   r4,>0100
-       call @draw_scaled_sprite
-       jmp  gpu_loop
+
+;       li   r0,barrel_sprite
+;       li   r1,>4248
+;       li   r2,>0DA0
+;       li   r3,>012B
+;       li   r4,>012B
+;       call @draw_scaled_sprite
+
+       li   r0,gpu_sprites
+       mov  r0,@sprite_list_ptr
+gpu_sprite_loop:
+       mov  @sprite_list_ptr,r3
+       mov  *r3+,r0
+       jeq  gpu_loop                   ; End of sprite list
+       mov  *r3+,r1
+       mov  *r3+,r2
+       mov  r3,@sprite_list_ptr
+       call @draw_sprite
+       jmp  gpu_sprite_loop
 
 *********************************************************************************
 *
@@ -47,6 +59,8 @@ gpu_loop:
 *
 draw_bitmap:
 *      Init
+       mov  r0,r7                      ; nx
+       mov  r1,r8                      ; ny
        li   r4,bitmap_dst + (bitmap_dst_height - 1) * (bitmap_width / 2) ; Destination address (bottom row)
        clr  r5                         ; Row index * 2, bottom row = 0
        clr  r10                        ; For the destination byte (2 pixels)
@@ -56,21 +70,21 @@ draw_bitmap_1:
        push r2                         ; Save x
        push r3                         ; Save y
 *      Scale x
-       mov  r0,r7                      ; nx
-       mov  @scale_table(r5),r8        ; scale
-       call @gpu_mpy_fp88              ; Calculate nx * scale in r7 and 64 * nx * scale in r8
-       mov  r7,r13                     ; stepX = nx * scale
-       sla  r7,6
-       s    r7,r2                      ; x -= 64 * stepX (move to left)
-       s    r7,r3                      ; y -= 64 * stepX (move forward)
+       mov  r7,r0                      ; nx
+       mov  @scale_table(r5),r1        ; scale
+       call @signed_mpy                ; Calculate nx * scale in r7 and 64 * nx * scale in r0
+       mov  r0,r13                     ; stepX = nx * scale
+       sla  r0,6
+       s    r0,r2                      ; x -= 64 * stepX (move to left)
+       s    r0,r3                      ; y -= 64 * stepX (move forward)
 *      Scale y
-       mov  r1,r7                      ; ny
-       mov  @scale_table(r5),r8        ; scale
-       call @gpu_mpy_fp88              ; Calculate ny * scale and 64 * nx * scale in r8
-       mov  r7,r14                     ; stepY = ny * scale
-       sla  r7,6
-       s    r7,r3                      ; y -= 64 * stepY (move to left)
-       a    r7,r2                      ; x += 64 * stepY (move forward)
+       mov  r8,r0                      ; ny
+       mov  @scale_table(r5),r1        ; scale
+       call @signed_mpy                ; Calculate ny * scale and 64 * nx * scale in r8
+       mov  r0,r14                     ; stepY = ny * scale
+       sla  r0,6
+       s    r0,r3                      ; y -= 64 * stepY (move to left)
+       a    r0,r2                      ; x += 64 * stepY (move forward)
        .ifeq debug,1
        call @plot
        .endif
@@ -132,14 +146,86 @@ draw_bitmap_4a:
 
 *********************************************************************
 *
-* Draw a sprite as seen from (@gpu_x, 2gpu_y)
+* Draw a sprite as seen from (@gpu_x, @gpu_y)
 * looking in the direction (@gpu_dx, @gpu_dy)
 *
 * r0: Address of sprite graphics data (width, height, bitmap)
-* r1: Center x position in source map coordinates
-* r2: Bottom y position in source map coordinates
+* r1: x position in source map coordinates (FP 8.8, unsigned, 0 <= x < 256)
+* r2: y position in source map coordinates (FP 8.8, unsigned, 0 <= y < 256)
 *
 draw_sprite:
+       mov  r0,@sprite_data
+*      Vector from player to sprite
+       s    @gpu_x,r1
+       mov  r1,@sprite_dx
+       s    @gpu_y,r2
+       mov  r2,@sprite_dy
+*      Test if sprite is in front of player
+       mov  @gpu_dx,r0
+       mov  @sprite_dx,r1
+       mov  @gpu_dy,r2
+       mov  @sprite_dy,r3
+       call @dot_product
+       mov  @dp,r0
+       jlt  draw_sprite_1
+       jeq  draw_sprite_1
+*      Rotate (sprite_dx, sprite_dy) by (dx, -dy) to make it relative to the view direction
+       mov  @sprite_dx,r0
+       mov  @sprite_dy,r1
+       mov  @gpu_dx,@cos_a
+       mov  @gpu_dy,@sin_a
+       neg  @sin_a
+       call @rotate
+       mov  r2,@sprite_z               ; Rotated x becomes new sprite z (as seen from player)
+       ci   r2,>0d00
+       jlt  draw_sprite_1
+*      Calculate scale factor 1 / sprite_z
+       li   r0,>1000                   ; 16.0 as FP 8.8 (using 16 instead of 1 gives higher precision, and fits with size of sprites)
+       mov  r2,r1                      ; sprite_z (positive)
+       call @unsigned_div
+       mov  r0,@scale_factor           ; 16.0 / z
+*      Projected x is calculated as sprite_x / sprite z = sprite_x * scale_factor
+       mov  r3,r1                      ; Rotated y becomes new sprite x (as seen from player)
+       call @signed_mpy
+*      Scale projected x if it is within bounds
+       ci   r0,>0fff                   ; Check for >= 16 (because 16 * 8 = 128)
+       jgt  draw_sprite_1
+       ci   r0,->1000                  ; Check for < -16 (because -16 * 8 = -128)
+       jlt  draw_sprite_1
+       sla  r0,3                       ; Scale projected sprite_x * 8
+       mov  r0,@sprite_x
+*      Size of scaled sprite
+       mov  @sprite_data,r2            ; Sprite data
+       mov  *r2+,r0                    ; Width in source pixels
+       mov  @scale_factor,r1
+       call @unsigned_mpy              ; Width * scale_factor
+       mov  r0,@sprite_width           ; Scaled width
+       mov  *r2+,r0                    ; Height in source pixels
+       mov  @scale_factor,r1
+       call @unsigned_mpy              ; Height * scale_factor
+       mov  r0,@sprite_height          ; Scaled height
+*      X position on destination bitmap
+       mov  @sprite_x,r1
+       ai   r1,bitmap_width*256        ; Center
+       mov  @sprite_width,r0           ; Sprite width
+       srl  r0,1                       ; Width / 2
+       s    r0,r1                      ; sprite_x - width / 2
+*      Check if x is within screen bounds
+       jnc  draw_sprite_1
+*      Y position on destination bitmap
+       mov  @scale_factor,r2
+;       sla  r2,1
+;      s    @sprite_height,r2          ; Sprite data - height
+*      Check if y is within screen bounds
+;       jnc  draw_sprite_1
+*      Scale
+       mov  @sprite_z,r3
+       srl  r3,4
+       mov  r3,r4
+*      Draw sprite
+       mov  @sprite_data,r0
+       call @draw_scaled_sprite
+draw_sprite_1:
        ret
 *// draw sprite
 
@@ -166,6 +252,7 @@ draw_scaled_sprite:
        srl  r2,4                       ; 000YYYYY.YYXXXXXX
        ai   r2,bitmap_dst
 *      Init
+       sla  r3,1                       ; Scale x *= 2
        mov  *r0+,r5                    ; Sprite bitmap width
        mov  *r0+,r6                    ; Sprite bitmap height
        clr  r9                         ; For the source byte (2 pixels)
@@ -175,7 +262,9 @@ draw_scaled_sprite:
 draw_scaled_sprite_1:
        clr  r7                         ; Source bitmap x
        push r0
+       push r1
        mov  r8,r9                      ; y
+       andi r9,>ff00                   ; int(y)
        mpy  r5,r9                      ; y * width
        srl  r9,2                       ; / 4 (since width is in normal pixels there are 4 pixels per byte)
        a    r9,r0                      ; Add to source address
@@ -189,44 +278,47 @@ draw_scaled_sprite_2:
        coc  r11,r7                     ; Left or right source pixel?
        jeq  draw_scaled_sprite_4
 *      Left source pixel
+       andi r9,>f000
+       jeq  draw_scaled_sprite_7       ; Skip pixel if transparent
        coc  r11,r1
        jeq  draw_scaled_sprite_3
 *      Left source, left destination
-       andi r9,>f000
        andi r10,>0f00
        jmp  draw_scaled_sprite_6
 draw_scaled_sprite_3:
 *      Left source, right destination
-       andi r9,>f000
        srl  r9,4
        andi r10,>f000
        jmp  draw_scaled_sprite_6
 draw_scaled_sprite_4:
 *      Right source pixel
+       andi r9,>0f00
+       jeq  draw_scaled_sprite_7       ; Skip pixel if transparent
        coc  r11,r1
        jeq  draw_scaled_sprite_5
 *      Right source, left destination
-       andi r9,>0f00
        sla  r9,4
        andi r10,>0f00
        jmp  draw_scaled_sprite_6
 draw_scaled_sprite_5:
 *      Right source, right destination
-       andi r9,>0f00
        andi r10,>f000
 draw_scaled_sprite_6:
        socb r9,r10
+       andi r2,>0fff                   ; Wrap to destination bitmap
        movb r10,*r2
-       coc  r11,r1
-       jne  draw_scaled_sprite_7
-       inc  r2
 draw_scaled_sprite_7:
+       coc  r11,r1
+       jne  draw_scaled_sprite_8
+       inc  r2
+draw_scaled_sprite_8:
        inv  r1
        a    r3,r7                      ; x += scale x
        c    r7,r5                      ; x > width ?
        jlt  draw_scaled_sprite_2
        pop  r2
        ai   r2,bitmap_width/2          ; Next destination row
+       pop  r1
        pop  r0
        a    r4,r8                      ; y += scale y
        c    r8,r6                      ; y > height ?
@@ -234,37 +326,187 @@ draw_scaled_sprite_7:
        ret
 *// draw_scaled_sprite
 
-*********************************************************************
+*********************************************************************************
 *
-* Signed, fixed point 8.8 multiplication
+* Calculate the (scalar) dot product of two vectors v and n in FP 8.8 format.
 *
-* r7: Multiplicand (FP 8.8)
-* r8: Multiplier (FP 8.8)
+* v ⋅ n = vx * nx + vy * ny
 *
-* On return r7 contains the product as FP 8.8.
-* Modifies r9.
+* r0: vx
+* r1: nx
+* r2: vy
+* r3: ny
 *
-gpu_mpy_fp88:
-       clr  r9                         ; Sign (0 means positive)
-       mov  r7,r7                      ; Test sign
-       jgt  gpu_mpy_fp88_1
-       neg  r7                         ; Make positive
-       inv  r9                         ; Flip sign (-1 means negative)
-gpu_mpy_fp88_1:
-       mov  r8,r8                      ; Test sign
-       jgt  gpu_mpy_fp88_2
-       neg  r8                         ; Make positive
-       inv  r9                         ; Flip sign
-gpu_mpy_fp88_2:
-       mpy  r8,r7                      ; Multiply the numbers
-       movb r8,r7                      ; We need the MSB of r8 (decimals)
-       swpb r7                         ; And the LSB of r7 (whole number) in reverse order
-       mov  r9,r9                      ; Test sign
-       jeq  gpu_mpy_fp88_3             ; Jump if sign positive
-       neg  r7                         ; Negate result
-gpu_mpy_fp88_3:
+* On return @dp contains the result in FP 8.8 format.
+*
+* Modifies r0-r2
+*
+dot_product:
+       call @signed_mpy                ; vx * nx
+       mov  r0,@dp                     ; vx * nx
+       mov  r2,r0                      ; vy
+       mov  r3,r1                      ; ny
+       call @signed_mpy                ; vy * ny
+       a    r0,@dp                     ; vx * nx + vy * ny
        ret
-*// gpu_mpy_fp88
+*// dot_product
+
+*********************************************************************************
+*
+* Rotate a point (x,y) in FP 8.8 format around the origin
+*
+* r0: x
+* r1: y
+* @cos_a: cosine of the angle, cos(a)
+* @sin_a: sine of the angle, sin(a)
+*
+* On return
+* r2: x1 = x * cos(a) - y * sin(a)
+* r3: y1 = x * sin(a) + y * cos(a)
+*
+rotate:
+       push r1                         ; Save y
+       push r0                         ; Save x
+       push r1                         ; Save y
+*      x1
+*      mov  r0,r0                      ; x
+       mov  @cos_a,r1                  ; cos(a)
+       call @signed_mpy                ; x * cos(a)
+       mov  r0,r2
+       pop  r0                         ; y
+       mov  @sin_a,r1                  ; sin(a)
+       call @signed_mpy                ; y * sin(a)
+       s    r0,r2                      ; x * cos(a) - y * sin(a)
+*      y1
+       pop  r0                         ; x
+       mov  @sin_a,r1                  ; sin(a)
+       call @signed_mpy                ; x * sin(a)
+       mov  r0,r3
+       pop  r0                         ; y
+       mov  @cos_a,r1                  ; cos(a)
+       call @signed_mpy                ; y * cos(a)
+       a    r0,r3                      ; x * sin(a) + y * cos(a)
+       ret
+*// rotate
+
+*********************************************************************************
+*
+* Multiply two unsigned numbers in FP 8.8 format.
+*
+* Input:
+* r0: multiplicand
+* r1: multiplier
+*
+* On return r0 contains the result in FP 8.8 format.
+*
+* Modifies r0-r1
+*
+unsigned_mpy:
+       mpy  r1,r0                      ; Multiply
+       movb r1,r0                      ; Move MSB of lower word result into MSB of higher word result
+       swpb r0                         ; Swap to get MSB and LSB of result into the right places
+       ret
+*// unsigned_mpy
+
+*********************************************************************************
+*
+* Multiply two signed numbers in FP 8.8 format.
+*
+* Input:
+* r0: multiplicand
+* r1: multiplier
+*
+* On return r0 contains the result in FP 8.8 format.
+*
+* Modifies r0-r1
+*
+signed_mpy:
+       push r2
+       clr  r2                         ; Sign
+       mov  r0,r0                      ; Test sign of multiplicand
+       jgt  signed_mpy_1
+       jeq  signed_mpy_3               ; If zero we're done
+       inv  r2                         ; Flip sign
+       neg  r0                         ; Make positive
+signed_mpy_1:
+       mov  r1,r1                      ; Test sign of multiplier
+       jgt  signed_mpy_2
+       inv  r2                         ; Flip sign
+       neg  r1                         ; Make positive
+signed_mpy_2:
+       mpy  r1,r0                      ; Multiply
+       movb r1,r0                      ; Move MSB of lower word result into MSB of higher word result
+       swpb r0                         ; Swap to get MSB and LSB of result into the right places
+       mov  r2,r2                      ; Test sign
+       jeq  signed_mpy_3
+       neg  r0                         ; Negate if sign is minus
+signed_mpy_3:
+       pop r2
+       ret
+*// signed_mpy
+
+*********************************************************************************
+*
+* Divide two unsigned numbers in FP 8.8 format.
+*
+* Input:
+* r0: dividend
+* r1: divisor
+*
+* On return r0 contains the result in FP 8.8 format.
+*
+* Modifies r0-r2
+*
+unsigned_div:
+       mov  r1,r2                      ; Copy divisor
+       jeq  signed_div_1               ; Can't divide by zero
+       swpb r0                         ; We need MSB of dividend in r0 LSB
+       clr  r1                         ; Second word of dividend
+       movb r0,r1                      ; We need LSB of dividend in r1 MSB
+       sb   r0,r0                      ; Clear MSB
+       div  r2,r0
+unsigned_div_1:
+       ret
+*// unsigned_div
+
+*********************************************************************************
+*
+* Divide two signed numbers in FP 8.8 format.
+*
+* Input:
+* r0: dividend
+* r1: divisor
+*
+* On return r0 contains the result in FP 8.8 format.
+*
+* Modifies r0-r2
+*
+signed_div:
+       push r3
+       clr  r3                         ; Sign
+       mov  r1,r2                      ; Test sign of divisor and copy it
+       jgt  signed_div_1
+       jeq  signed_div_3               ; Can't divide by zero
+       inv  r3                         ; Flip sign
+       neg  r2                         ; Make positive
+signed_div_1:
+       mov  r0,r0                      ; Test sign of dividend
+       jeq  signed_div_2
+       inv  r3                         ; Flip sign
+       neg  r0                         ; Make positive
+signed_div_2:
+       swpb r0                         ; We need MSB of dividend in r0 LSB
+       clr  r1                         ; Second word of dividend
+       movb r0,r1                      ; We need LSB of dividend in r1 MSB
+       sb   r0,r0                      ; Clear MSB
+       div  r2,r0
+       mov  r3,r3                      ; Test sign
+       jeq  signed_div_3
+       neg  r0                         ; Negate if sign is minus
+signed_div_3:
+       pop  r3
+       ret
+*// signed_div
 
 *********************************************************************
 *
@@ -306,6 +548,32 @@ plot_2:
 *
 * Data
 *
+sprite_list_ptr:
+       data gpu_sprites
+sprite_data:
+       data 0
+sprite_dx:
+       data 0
+sprite_dy:
+       data 0
+sprite_x:
+       data 0
+sprite_z:
+       data 0
+sprite_width:
+       data 0
+sprite_height:
+       data 0
+scale_factor:
+       data 0
+dp:
+       data 0
+cos_a:
+       data 0
+sin_a:
+       data 0
+
+
        copy "scale-table.a99"
 
 gpu_prg_high_end:

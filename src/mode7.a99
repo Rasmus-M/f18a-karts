@@ -75,17 +75,17 @@ spchrd:
 *
 gpu_program_tmp:
        equ  >0000
-bitmap_base:
+bitmap_base:                           ; 128 x 192 x 4 bbp = 12K
        equ  >0000
-bitmap_dst:                            ; 128 x 200 x 4 bbp = 12.5K
+bitmap_dst:
        equ  bitmap_base
-bitmap_gap:                            ; 512 bytes
+bitmap_gap:
        equ  bitmap_base + (bitmap_dst_height * bitmap_width / 2)
 bitmap_src:
        equ  bitmap_gap + (bitmap_gap_height * bitmap_width / 2)
 name_table:                            ; Name table (note: we only need 6 rows of this)
        equ  bitmap_src + (bitmap_src_height * bitmap_width / 2) ; = >3000
-gpu_data:                              ; Data shared between CPU and GPU
+gpu_data:                              ; Data shared between CPU and GPU (64 bytes)
        equ  >30C0
 tile_attr_table:                       ; Tile attribute table
        equ  >3100
@@ -141,21 +141,21 @@ padvar:                                ; Start of pad variables
        equ  one+2
 frame:
        equ padvar
-x:                                     ; FP 8.8
+x:                                     ; World x position (FP 8.8, unsigned, 0 <= x < 256)
        equ  frame+2
-y:                                     ; FP 8.8
+y:                                     ; World y position (FP 8.8, unsigned, 0 <= x < 128)
        equ  x+2
-vx:                                    ; Velocity vector x (FP 8.8)
+dx:                                    ; Direction vector x (FP 8.8, signed, -1 <= dx <= 1)
        equ  y+2
-vy:                                    ; Velocity vector y (FP 8.8)
-       equ  vx+2
-dx:                                    ; Direction vector x (FP 8.8)
-       equ  vy+2
-dy:                                    ; Direction vector y (FP 8.8)
+dy:                                    ; Direction vector y (FP 8.8, signed, -1 <= dy <= 1)
        equ  dx+2
-angle:                                 ; 0 - 255, higher values rotates clockwise
+vx:                                    ; Velocity vector x (FP 8.8, signed)
        equ  dy+2
-speed:                                 ; -max_speed - max_speed
+vy:                                    ; Velocity vector y (FP 8.8, signed)
+       equ  vx+2
+angle:                                 ; View angle, 0 - 255, higher values rotates clockwise
+       equ  vy+2
+speed:                                 ; Speed, -max_speed - max_speed
        equ  angle+2
 vdp_copy_pad:
        equ  speed+2
@@ -180,6 +180,8 @@ main:
        li   r1,x
        li   r2,16
        bl   @copy
+       bl   @calculate_dx_dy
+       bl   @upload_gpu_data
 loop:
        bl   @wait_gpu
        bl   @vsync
@@ -188,8 +190,9 @@ loop:
        bl   @display_sprites
        bl   @scroll_background
        bl   @user_input
-       bl   @calculate_directional_vector
+       bl   @calculate_dx_dy
        bl   @move
+       bl   @upload_gpu_data
        .ifeq debug,1
 *      Upload bitmap again
        li   r0,bitmap_src
@@ -257,30 +260,59 @@ trigger_gpu:
 
 *********************************************************************************
 *
-* Calculate directional vector
+* Display sprites
 *
-calculate_directional_vector:
+display_sprites:
        .proc
-*      dx
-       mov  @x,r1
-       li   r0,gpu_x
-       bl   @vsww
-       mov  @angle,r1
-       bl   @cos
-       mov  r1,@dx
-       li   r0,gpu_dx
-       bl   @vsww
-*      dy
+       li   r0,sprite_attr_table
+       bl   @vwad
+*      Kart left sprite
+       li   r1,>4e60
+       mov  r1,*r15
+       swpb r1
+       mov  r1,*r15
+       li   r1,>1404
+       mov  r1,*r15
+       swpb r1
+       mov  r1,*r15
+*      Kart right sprite
+       li   r1,>4e80
+       mov  r1,*r15
+       swpb r1
+       mov  r1,*r15
+       li   r1,>1444
+       mov  r1,*r15
+       swpb r1
+       mov  r1,*r15
+*      Marker on source map
        mov  @y,r1
-       li   r0,gpu_y
-       bl   @vsww
-       mov  @angle,r1
-       bl   @sin
-       mov  r1,@dy
-       li   r0,gpu_dy
-       bl   @vsww
+       andi r1,>7f00
+       ai   r1,->1000
+       ai   r1,bitmap_src_top*256
+       movb r1,*r15
+       mov  @x,r1
+       ai   r1,->1000
+       movb r1,*r15
+       li   r1,>1000
+       movb r1,*r15
+       swpb r1
+       movb r1,*r15
        .endproc
-*// calculate_directional_vector
+*// display_sprites
+
+*********************************************************************************
+*
+* Scroll background
+*
+scroll_background:
+       .proc
+       mov  @angle,r0
+       sla  r0,2
+       andi r0,>00ff
+       ori  r0,>1b00
+       bl   @vwtr
+       .endproc
+*// scroll_background
 
 *********************************************************************************
 *
@@ -342,6 +374,23 @@ user_input_8:
 
 *********************************************************************************
 *
+* Calculate directional vector
+*
+calculate_dx_dy:
+       .proc
+*      dx
+       mov  @angle,r1
+       bl   @cos
+       mov  r1,@dx
+*      dy
+       mov  @angle,r1
+       bl   @sin
+       mov  r1,@dy
+       .endproc
+*// calculate_dx_dy
+
+*********************************************************************************
+*
 * Move
 *
 move:
@@ -365,59 +414,28 @@ move:
 
 *********************************************************************************
 *
-* Display sprites
+* Upload GPU data
 *
-display_sprites:
+upload_gpu_data:
        .proc
-       li   r0,sprite_attr_table
-       bl   @vwad
-*      Kart left sprite
-       li   r1,>4e60
-       mov  r1,*r15
-       swpb r1
-       mov  r1,*r15
-       li   r1,>1404
-       mov  r1,*r15
-       swpb r1
-       mov  r1,*r15
-*      Kart right sprite
-       li   r1,>4e80
-       mov  r1,*r15
-       swpb r1
-       mov  r1,*r15
-       li   r1,>1444
-       mov  r1,*r15
-       swpb r1
-       mov  r1,*r15
-*      Marker on source map
-       mov  @y,r1
-       andi r1,>7f00
-       ai   r1,->1000
-       ai   r1,bitmap_src_top*256
-       movb r1,*r15
+*      x
+       li   r0,gpu_x
        mov  @x,r1
-       ai   r1,->1000
-       movb r1,*r15
-       li   r1,>1000
-       movb r1,*r15
-       swpb r1
-       movb r1,*r15
+       bl   @vsww
+*      y
+       li   r0,gpu_y
+       mov  @y,r1
+       bl   @vsww
+*      dx
+       li   r0,gpu_dx
+       mov  @dx,r1
+       bl   @vsww
+*      dy
+       li   r0,gpu_dy
+       mov  @dy,r1
+       bl   @vsww
        .endproc
-*// display_sprites
-
-*********************************************************************************
-*
-* Scroll background
-*
-scroll_background:
-       .proc
-       mov  @angle,r0
-       sla  r0,2
-       andi r0,>00ff
-       ori  r0,>1b00
-       bl   @vwtr
-       .endproc
-*// scroll_background
+*// upload_gpu_data
 
 *********************************************************************************
 *
@@ -697,13 +715,13 @@ lower_memory_max:
        aorg >a000
 
 init_data:
-       data >a000                      ; x
+       data >4000                      ; x
        data >1000                      ; y
        data >0000                      ; vx
        data >0000                      ; vy
-       data ->0100                     ; dx
+       data >0100                      ; dx
        data >0000                      ; dy
-       data 128                        ; angle
+       data 0                          ; angle
        data 0                          ; speed
 
 ***************************************************************************
