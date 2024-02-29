@@ -178,11 +178,11 @@ draw_sprite:
        call @rotate
        ci   r2,>4000                   ; Rotated x becomes new sprite z (as seen from player)
        jhe  draw_sprite_1
-       ci   r2,>0c00
+       ci   r2,>0400
        jle  draw_sprite_1
        mov  r2,@sprite_z
 *      Calculate scale factor 1 / sprite_z
-       li   r0,>1000                   ; 16.0 as FP 8.8 (using 16 instead of 1 gives higher precision, and fits with size of sprites)
+       li   r0,>0800                   ; 16.0 as FP 8.8 (using 16 instead of 1 gives higher precision, and fits with size of sprites)
        mov  r2,r1                      ; sprite_z (positive)
        call @unsigned_div
        mov  r0,@scale_factor           ; 16.0 / z
@@ -190,11 +190,11 @@ draw_sprite:
        mov  r3,r1                      ; Rotated y becomes new sprite x (as seen from player)
        call @signed_mpy
 *      Scale projected x if it is within bounds
-       ci   r0,>0fff                   ; Check for >= 16 (because 16 * 8 = 128)
+       ci   r0,>07ff                   ; Check for >= 16 (because 16 * 8 = 128)
        jgt  draw_sprite_1
-       ci   r0,->1000                  ; Check for < -16 (because -16 * 8 = -128)
+       ci   r0,->0800                  ; Check for < -16 (because -16 * 8 = -128)
        jlt  draw_sprite_1
-       sla  r0,3                       ; Scale projected sprite_x * 8
+       sla  r0,4                       ; Scale projected sprite_x * 8
        mov  r0,@sprite_x
 *      Size of scaled sprite
        mov  @sprite_data,r2            ; Sprite data
@@ -216,12 +216,12 @@ draw_sprite:
        jnc  draw_sprite_1
 *      Y position on destination bitmap
        mov  @scale_factor,r2
-       sla  r2,4                       ; scale_factor * 16
+       sla  r2,5                       ; scale_factor * 16
 ;       srl  r2,2                       ; scale_factor / 4
        s    @sprite_height,r2          ; Align to bottom
 *      Scale
        mov  @sprite_z,r3
-       srl  r3,4
+       srl  r3,3
        mov  r3,r4
 *      Draw sprite
        mov  @sprite_data,r0
