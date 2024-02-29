@@ -72,17 +72,17 @@ draw_bitmap_1:
 *      Scale x
        mov  r7,r0                      ; nx
        mov  @scale_table(r5),r1        ; scale
-       call @signed_mpy                ; Calculate nx * scale in r7 and 64 * nx * scale in r0
+       call @signed_mpy                ; Calculate nx * scale in r7
        mov  r0,r13                     ; stepX = nx * scale
-       sla  r0,6
+       sla  r0,6                       ; 64 * stepX
        s    r0,r2                      ; x -= 64 * stepX (move to left)
        s    r0,r3                      ; y -= 64 * stepX (move forward)
 *      Scale y
        mov  r8,r0                      ; ny
        mov  @scale_table(r5),r1        ; scale
-       call @signed_mpy                ; Calculate ny * scale and 64 * nx * scale in r8
+       call @signed_mpy                ; Calculate ny * scale in r7
        mov  r0,r14                     ; stepY = ny * scale
-       sla  r0,6
+       sla  r0,6                       ; 64 * stepY
        s    r0,r3                      ; y -= 64 * stepY (move to left)
        a    r0,r2                      ; x += 64 * stepY (move forward)
        .ifeq debug,1
@@ -176,9 +176,11 @@ draw_sprite:
        mov  @gpu_dy,@sin_a
        neg  @sin_a
        call @rotate
-       mov  r2,@sprite_z               ; Rotated x becomes new sprite z (as seen from player)
-       ci   r2,>0d00
-       jlt  draw_sprite_1
+       ci   r2,>4000                   ; Rotated x becomes new sprite z (as seen from player)
+       jhe  draw_sprite_1
+       ci   r2,>0c00
+       jle  draw_sprite_1
+       mov  r2,@sprite_z
 *      Calculate scale factor 1 / sprite_z
        li   r0,>1000                   ; 16.0 as FP 8.8 (using 16 instead of 1 gives higher precision, and fits with size of sprites)
        mov  r2,r1                      ; sprite_z (positive)
@@ -214,10 +216,9 @@ draw_sprite:
        jnc  draw_sprite_1
 *      Y position on destination bitmap
        mov  @scale_factor,r2
-;       sla  r2,1
-;      s    @sprite_height,r2          ; Sprite data - height
-*      Check if y is within screen bounds
-;       jnc  draw_sprite_1
+       sla  r2,4                       ; scale_factor * 16
+;       srl  r2,2                       ; scale_factor / 4
+       s    @sprite_height,r2          ; Align to bottom
 *      Scale
        mov  @sprite_z,r3
        srl  r3,4
@@ -422,25 +423,17 @@ unsigned_mpy:
 *
 signed_mpy:
        push r2
-       clr  r2                         ; Sign
-       mov  r0,r0                      ; Test sign of multiplicand
-       jgt  signed_mpy_1
-       jeq  signed_mpy_3               ; If zero we're done
-       inv  r2                         ; Flip sign
-       neg  r0                         ; Make positive
-signed_mpy_1:
-       mov  r1,r1                      ; Test sign of multiplier
-       jgt  signed_mpy_2
-       inv  r2                         ; Flip sign
-       neg  r1                         ; Make positive
-signed_mpy_2:
+       mov  r0,r2                      ; Sign
+       xor  r1,r2                      ; Sign
+       abs  r0
+       abs  r1
        mpy  r1,r0                      ; Multiply
        movb r1,r0                      ; Move MSB of lower word result into MSB of higher word result
        swpb r0                         ; Swap to get MSB and LSB of result into the right places
-       mov  r2,r2                      ; Test sign
-       jeq  signed_mpy_3
+       sla  r2,1                       ; Test sign
+       jnc  signed_mpy_1
        neg  r0                         ; Negate if sign is minus
-signed_mpy_3:
+signed_mpy_1:
        pop r2
        ret
 *// signed_mpy

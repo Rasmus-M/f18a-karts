@@ -715,8 +715,8 @@ lower_memory_max:
        aorg >a000
 
 init_data:
-       data >4000                      ; x
-       data >1000                      ; y
+       data >8800                      ; x
+       data >1400                      ; y
        data >0000                      ; vx
        data >0000                      ; vy
        data >0100                      ; dx

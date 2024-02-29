@@ -4,9 +4,9 @@
 *
        xorg gpu_data
 gpu_x:                                     ;
-       data >8000
+       data >0000
 gpu_y:                                     ;
-       data >4000
+       data >0000
 gpu_dx:
        data >0000
 gpu_dy:
@@ -23,8 +23,8 @@ gpu_sprite_size:
 
 gpu_sprites:
        data barrel_sprite
-       data >9000                      ; x
-       data >1000                      ; y
+       data >ac00                      ; x
+       data >1400                      ; y
        data 0                          ; end
 
        aorg
