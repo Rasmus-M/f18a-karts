@@ -85,9 +85,6 @@ draw_bitmap_1:
        sla  r0,6                       ; 64 * stepY
        s    r0,r3                      ; y -= 64 * stepY (move to left)
        a    r0,r2                      ; x += 64 * stepY (move forward)
-       .ifeq debug,1
-       call @plot
-       .endif
 draw_bitmap_2:
 *      Left destination pixel
        mov  r2,r9                      ; XXXXXXXX.xxxxxxxx
@@ -132,9 +129,6 @@ draw_bitmap_4a:
        dec  r6                         ; Column counter
        jne  draw_bitmap_2
 *      Next row
-       .ifeq debug,1
-       call @plot
-       .endif
        pop  r3                         ; Restore y
        pop  r2                         ; Restore x
        ai   r4,-bitmap_width           ; Move destination 2 lines up
@@ -156,45 +150,36 @@ draw_bitmap_4a:
 draw_sprite:
        mov  r0,@sprite_data
 *      Vector from player to sprite
-       s    @gpu_x,r1
-       mov  r1,@sprite_dx
-       s    @gpu_y,r2
-       mov  r2,@sprite_dy
-*      Test if sprite is in front of player
-       mov  @gpu_dx,r0
-       mov  @sprite_dx,r1
-       mov  @gpu_dy,r2
-       mov  @sprite_dy,r3
-       call @dot_product
-       mov  @dp,r0
-       jlt  draw_sprite_1
-       jeq  draw_sprite_1
-*      Rotate (sprite_dx, sprite_dy) by (dx, -dy) to make it relative to the view direction
-       mov  @sprite_dx,r0
-       mov  @sprite_dy,r1
-       mov  @gpu_dx,@cos_a
-       mov  @gpu_dy,@sin_a
-       neg  @sin_a
-       call @rotate
-       ci   r2,>4000                   ; Rotated x becomes new sprite z (as seen from player)
-       jhe  draw_sprite_1
-       ci   r2,>0400
-       jle  draw_sprite_1
+       s    @gpu_x,r1                  ; player_x
+       mov  r1,@sprite_dx              ; sprite_x - player_x
+       s    @gpu_y,r2                  ; player_y
+       mov  r2,@sprite_dy              ; sprite_y - player_y
+*      Rotate (sprite_dx, sprite_dy) by (dx, -dy) to make it relative to the player as if we look you the x axis
+       mov  @sprite_dx,r0              ; sprite_dx
+       mov  @sprite_dy,r1              ; sprite_dy
+       mov  @gpu_dx,@cos_a             ; cos(a) = player_dx
+       mov  @gpu_dy,@sin_a             ; sin(a) = player_dy
+       neg  @sin_a                     ; -sin(a)
+       call @rotate                    ; Rotated x becomes new sprite z (as seen from player)
+       ci   r2,>4000                   ; If the sprite is too close or behind the player
+       jgt  draw_sprite_1              ; we don't draw it
+       ci   r2,>0400                   ; If the sprite is too far away
+       jlt  draw_sprite_1              ; we don't draw it
        mov  r2,@sprite_z
 *      Calculate scale factor 1 / sprite_z
-       li   r0,>0800                   ; 16.0 as FP 8.8 (using 16 instead of 1 gives higher precision, and fits with size of sprites)
+       li   r0,>0800                   ; 8.0 as FP 8.8 (using 8 instead of 1 gives higher precision, and fits with size of sprites)
        mov  r2,r1                      ; sprite_z (positive)
-       call @unsigned_div
-       mov  r0,@scale_factor           ; 16.0 / z
+       call @unsigned_div              ; 8.0 / z
+       mov  r0,@scale_factor           ; scale_factor = 8.0 / z
 *      Projected x is calculated as sprite_x / sprite z = sprite_x * scale_factor
        mov  r3,r1                      ; Rotated y becomes new sprite x (as seen from player)
-       call @signed_mpy
+       call @signed_mpy                ; sprite_x * scale_factor
 *      Scale projected x if it is within bounds
-       ci   r0,>07ff                   ; Check for >= 16 (because 16 * 8 = 128)
+       ci   r0,>07ff                   ; Check for >= 8 (because 16 * 8 = 128)
        jgt  draw_sprite_1
-       ci   r0,->0800                  ; Check for < -16 (because -16 * 8 = -128)
+       ci   r0,->0800                  ; Check for < -8 (because -16 * 8 = -128)
        jlt  draw_sprite_1
-       sla  r0,4                       ; Scale projected sprite_x * 8
+       sla  r0,4                       ; Scale projected 16 * sprite_x
        mov  r0,@sprite_x
 *      Size of scaled sprite
        mov  @sprite_data,r2            ; Sprite data
@@ -208,7 +193,7 @@ draw_sprite:
        mov  r0,@sprite_height          ; Scaled height
 *      X position on destination bitmap
        mov  @sprite_x,r1
-       ai   r1,bitmap_width*256        ; Center
+       ai   r1,bitmap_width*256        ; Center (not bitmap_width / 2 since there are two positions per pixel)
        mov  @sprite_width,r0           ; Sprite width
        srl  r0,1                       ; Width / 2
        s    r0,r1                      ; sprite_x - width / 2
@@ -216,8 +201,7 @@ draw_sprite:
        jnc  draw_sprite_1
 *      Y position on destination bitmap
        mov  @scale_factor,r2
-       sla  r2,5                       ; scale_factor * 16
-;       srl  r2,2                       ; scale_factor / 4
+       sla  r2,5                       ; scale_factor * 32
        s    @sprite_height,r2          ; Align to bottom
 *      Scale
        mov  @sprite_z,r3
@@ -329,31 +313,6 @@ draw_scaled_sprite_8:
 
 *********************************************************************************
 *
-* Calculate the (scalar) dot product of two vectors v and n in FP 8.8 format.
-*
-* v ⋅ n = vx * nx + vy * ny
-*
-* r0: vx
-* r1: nx
-* r2: vy
-* r3: ny
-*
-* On return @dp contains the result in FP 8.8 format.
-*
-* Modifies r0-r2
-*
-dot_product:
-       call @signed_mpy                ; vx * nx
-       mov  r0,@dp                     ; vx * nx
-       mov  r2,r0                      ; vy
-       mov  r3,r1                      ; ny
-       call @signed_mpy                ; vy * ny
-       a    r0,@dp                     ; vx * nx + vy * ny
-       ret
-*// dot_product
-
-*********************************************************************************
-*
 * Rotate a point (x,y) in FP 8.8 format around the origin
 *
 * r0: x
@@ -452,7 +411,7 @@ signed_mpy_1:
 *
 unsigned_div:
        mov  r1,r2                      ; Copy divisor
-       jeq  signed_div_1               ; Can't divide by zero
+       jeq  unsigned_div_1             ; Can't divide by zero
        swpb r0                         ; We need MSB of dividend in r0 LSB
        clr  r1                         ; Second word of dividend
        movb r0,r1                      ; We need LSB of dividend in r1 MSB
@@ -461,81 +420,6 @@ unsigned_div:
 unsigned_div_1:
        ret
 *// unsigned_div
-
-*********************************************************************************
-*
-* Divide two signed numbers in FP 8.8 format.
-*
-* Input:
-* r0: dividend
-* r1: divisor
-*
-* On return r0 contains the result in FP 8.8 format.
-*
-* Modifies r0-r2
-*
-signed_div:
-       push r3
-       clr  r3                         ; Sign
-       mov  r1,r2                      ; Test sign of divisor and copy it
-       jgt  signed_div_1
-       jeq  signed_div_3               ; Can't divide by zero
-       inv  r3                         ; Flip sign
-       neg  r2                         ; Make positive
-signed_div_1:
-       mov  r0,r0                      ; Test sign of dividend
-       jeq  signed_div_2
-       inv  r3                         ; Flip sign
-       neg  r0                         ; Make positive
-signed_div_2:
-       swpb r0                         ; We need MSB of dividend in r0 LSB
-       clr  r1                         ; Second word of dividend
-       movb r0,r1                      ; We need LSB of dividend in r1 MSB
-       sb   r0,r0                      ; Clear MSB
-       div  r2,r0
-       mov  r3,r3                      ; Test sign
-       jeq  signed_div_3
-       neg  r0                         ; Negate if sign is minus
-signed_div_3:
-       pop  r3
-       ret
-*// signed_div
-
-*********************************************************************
-*
-* Plot a point on the source bitmap
-*
-* r2: x (FP 8.8)
-* r3: y (FP 8.8)
-*
-       .ifeq debug,1
-plot:
-       push r9
-       push r10
-       push r11
-       mov  r2,r9                      ; XXXXXXXX.xxxxxxxx
-       swpb r9                         ; 00000000.XXXXXXXX
-       movb r3,r9                      ; YYYYYYYY.XXXXXXXX
-       sla  r9,1                       ; YYYYYYYX.XXXXXXX0
-       srl  r9,3                       ; 000YYYYY.YYXXXXXX
-       movb @bitmap_src(r9),r10
-       li   r11,>0200
-       coc  r11,r2                     ; Left or right pixel?
-       jne  plot_1
-       andi r10,>f000
-       ori  r10,>0100
-       jmp  plot_2
-plot_1:
-       andi r10,>0f00
-       ori  r10,>1000
-plot_2:
-       movb r10,@bitmap_src(r9)
-       pop  r11
-       pop  r10
-       pop  r9
-       ret
-       .endif
-*// plot
 
 *********************************************************************
 *

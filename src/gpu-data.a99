@@ -24,7 +24,10 @@ gpu_sprite_size:
 gpu_sprites:
        data barrel_sprite
        data >ac00                      ; x
-       data >1400                      ; y
+       data >0a00                      ; y
+       data barrel_sprite
+       data >ac00                      ; x
+       data >1f00                      ; y
        data 0                          ; end
 
        aorg
