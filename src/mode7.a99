@@ -48,6 +48,10 @@ n_sprite_patterns:
        equ  2
 max_speed:
        equ  64
+max_sprite_dist:
+       equ  >4000
+min_sprite_dist:
+       equ  >0400
 
 **
 * Memory mapped addresses

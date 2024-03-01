@@ -62,16 +62,21 @@ draw_bitmap:
        mov  r0,r7                      ; nx
        mov  r1,r8                      ; ny
        li   r4,bitmap_dst + (bitmap_dst_height - 1) * (bitmap_width / 2) ; Destination address (bottom row)
-       clr  r5                         ; Row index * 2, bottom row = 0
+       li   r5,bitmap_dst_height       ; Row index
        clr  r10                        ; For the destination byte (2 pixels)
        li   r11,>0200                  ; Bit in x determining left or right pixel
 draw_bitmap_1:
        li   r6,bitmap_width/2          ; Column counter
        push r2                         ; Save x
        push r3                         ; Save y
+*      Scale factor
+       clr  r0
+       li   r1,>0400
+       div  r5,r0
+       mov  r0,@scale_factor
 *      Scale x
        mov  r7,r0                      ; nx
-       mov  @scale_table(r5),r1        ; scale
+       mov  @scale_factor,r1           ; scale
        call @signed_mpy                ; Calculate nx * scale in r7
        mov  r0,r13                     ; stepX = nx * scale
        sla  r0,6                       ; 64 * stepX
@@ -79,7 +84,7 @@ draw_bitmap_1:
        s    r0,r3                      ; y -= 64 * stepX (move forward)
 *      Scale y
        mov  r8,r0                      ; ny
-       mov  @scale_table(r5),r1        ; scale
+       mov  @scale_factor,r1           ; scale
        call @signed_mpy                ; Calculate ny * scale in r7
        mov  r0,r14                     ; stepY = ny * scale
        sla  r0,6                       ; 64 * stepY
@@ -132,8 +137,7 @@ draw_bitmap_4a:
        pop  r3                         ; Restore y
        pop  r2                         ; Restore x
        ai   r4,-bitmap_width           ; Move destination 2 lines up
-       inct r5                         ; Next row index * 2
-       ci   r5,bitmap_dst_height*2
+       dec  r5                         ; Row counter--
        jne  draw_bitmap_1
        ret
 *// draw_bitmap
@@ -152,18 +156,24 @@ draw_sprite:
 *      Vector from player to sprite
        s    @gpu_x,r1                  ; player_x
        mov  r1,@sprite_dx              ; sprite_x - player_x
+       abs  r1                         ; For a quick check
+       ci   r1,max_sprite_dist         ; If dx is greater then the max distance
+       jgt  draw_sprite_1              ; then leave since dx is always <= distance
        s    @gpu_y,r2                  ; player_y
        mov  r2,@sprite_dy              ; sprite_y - player_y
-*      Rotate (sprite_dx, sprite_dy) by (dx, -dy) to make it relative to the player as if we look you the x axis
+       abs  r2                         ; For a quick check
+       ci   r2,max_sprite_dist         ; If dy is greater then the max distance
+       jgt  draw_sprite_1              ; then leave since dy is always <= distance
+*      Rotate (sprite_dx, sprite_dy) by (dx, -dy) to make it relative to the player, as if we look out of the x axis
        mov  @sprite_dx,r0              ; sprite_dx
        mov  @sprite_dy,r1              ; sprite_dy
        mov  @gpu_dx,@cos_a             ; cos(a) = player_dx
        mov  @gpu_dy,@sin_a             ; sin(a) = player_dy
        neg  @sin_a                     ; -sin(a)
        call @rotate                    ; Rotated x becomes new sprite z (as seen from player)
-       ci   r2,>4000                   ; If the sprite is too close or behind the player
+       ci   r2,max_sprite_dist         ; If the sprite is too far away
        jgt  draw_sprite_1              ; we don't draw it
-       ci   r2,>0400                   ; If the sprite is too far away
+       ci   r2,min_sprite_dist         ; If the sprite is too close or behind the player
        jlt  draw_sprite_1              ; we don't draw it
        mov  r2,@sprite_z
 *      Calculate scale factor 1 / sprite_z
@@ -449,9 +459,6 @@ cos_a:
        data 0
 sin_a:
        data 0
-
-
-       copy "scale-table.a99"
 
 gpu_prg_high_end:
        equ  $
