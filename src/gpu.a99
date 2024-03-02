@@ -255,15 +255,17 @@ draw_scaled_sprite:
        li   r11,>0200                  ; Bit in x determining left or right pixel
        clr  r8                         ; Source bitmap y
 draw_scaled_sprite_1:
+       mov  r2,r2
+       jlt  draw_scaled_sprite_9
+       push r2
        clr  r7                         ; Source bitmap x
-       push r0
        push r1
+       push r0
        mov  r8,r9                      ; y
        andi r9,>ff00                   ; int(y)
        mpy  r5,r9                      ; y * width
        srl  r9,2                       ; / 4 (since width is in normal pixels there are 4 pixels per byte)
        a    r9,r0                      ; Add to source address
-       push r2
 draw_scaled_sprite_2:
        mov  r7,r9
        srl  r9,10                      ; To byte offset
@@ -300,7 +302,7 @@ draw_scaled_sprite_5:
        andi r10,>f000
 draw_scaled_sprite_6:
        socb r9,r10
-       andi r2,>0fff                   ; Wrap to destination bitmap
+;       andi r2,>0fff                   ; Wrap to destination bitmap
        movb r10,*r2
 draw_scaled_sprite_7:
        coc  r11,r1
@@ -311,13 +313,17 @@ draw_scaled_sprite_8:
        a    r3,r7                      ; x += scale x
        c    r7,r5                      ; x > width ?
        jlt  draw_scaled_sprite_2
-       pop  r2
-       ai   r2,bitmap_width/2          ; Next destination row
-       pop  r1
        pop  r0
+       pop  r1
+       pop  r2
+draw_scaled_sprite_9:
+       ai   r2,bitmap_width/2          ; Next destination row
+       ci   r2,bitmap_dst+(bitmap_dst_height * bitmap_width / 2)
+       jhe  draw_scaled_sprite_10
        a    r4,r8                      ; y += scale y
        c    r8,r6                      ; y > height ?
        jlt  draw_scaled_sprite_1
+draw_scaled_sprite_10:
        ret
 *// draw_scaled_sprite
 
