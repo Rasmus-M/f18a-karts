@@ -91,7 +91,7 @@ gpu_data:                              ; Data shared between CPU and GPU (64 byt
        equ  >30C0
 tile_attr_table:                       ; Tile attribute table
        equ  >3100
-sprite_attr_table:                     ; Sprite attribute table = >3000
+sprite_attr_table:                     ; Sprite attribute table
        equ  >3180
 graphics_data_1:                       ; >600 bytes for scaled sprites
        equ  >3200
@@ -107,7 +107,7 @@ sprite_pattern_table_p1:               ; Sprite pattern table plane 1
        equ  >3c00
 graphics_data_3:                       ; >300 bytes for scaled sprites
        equ  >3d00
-gpu_program:                           ; Approx. >600 bytes for scaled sprites
+gpu_program:                           ; Approx. >550 bytes for scaled sprites
        equ  >4000
 
 **
@@ -728,11 +728,7 @@ gpu_data_start:
 gpu_data_end:
        equ  $
 bmp:
-       .ifeq debug,1
-       bcopy "bitmap-debug.bin"
-       .else
        bcopy "bitmap.bin"
-       .endif
 
 gfx_data_1:
        data >1800,>2000                ; width in pixels (2 pixels per fat pixel), height in pixels
