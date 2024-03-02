@@ -28,6 +28,9 @@ gpu_sprites:
        data barrel_sprite
        data >ac00                      ; x
        data >1f00                      ; y
+       data kart_sprite
+       data >4000                      ; x
+       data >1400                      ; y
        data 0                          ; end
 
        aorg

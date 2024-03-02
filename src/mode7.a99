@@ -23,9 +23,9 @@ screen_width:
 screen_height:
        equ  screen_height_char*8
 background_image_top_char:
-       equ  2
+       equ  0
 background_image_height_char:
-       equ  4
+       equ  6
 bitmap_top:
        equ  (background_image_top_char+background_image_height_char)*8
 bitmap_width:
@@ -43,7 +43,7 @@ bitmap_src_height:
 bitmap_height:
        equ  bitmap_dst_height+bitmap_gap_height+bitmap_src_height
 n_char_patterns:
-       equ  10
+       equ  16
 n_sprite_patterns:
        equ  2
 max_speed:
@@ -87,14 +87,14 @@ bitmap_src:
        equ  bitmap_gap + (bitmap_gap_height * bitmap_width / 2)
 name_table:                            ; Name table (note: we only need 6 rows of this)
        equ  bitmap_src + (bitmap_src_height * bitmap_width / 2) ; = >3000
-gpu_data:                              ; Data shared between CPU and GPU (64 bytes)
-       equ  >30C0
-tile_attr_table:                       ; Tile attribute table
-       equ  >3100
 sprite_attr_table:                     ; Sprite attribute table
        equ  >3180
-graphics_data_1:                       ; >600 bytes for scaled sprites
+gpu_data:                              ; Data shared between CPU and GPU (64 bytes)
+       equ  >31c0
+tile_attr_table:                       ; Tile attribute table
        equ  >3200
+graphics_data_1:                       ; >500 bytes for scaled sprites
+       equ  >3300
 pattern_table:                         ; Pattern table
        equ  >3800
 sprite_pattern_table:                  ; Sprite pattern table
@@ -303,6 +303,11 @@ scroll_background:
        mov  @angle,r0
        sla  r0,2
        andi r0,>00ff
+       ori  r0,>1900
+       bl   @vwtr
+       mov  @angle,r0
+       sla  r0,1
+       andi r0,>00ff
        ori  r0,>1b00
        bl   @vwtr
        .endproc
@@ -502,6 +507,9 @@ vregs2:
        byte >05,sprite_attr_table/>80      ; Sprite attribute table
        byte >06,sprite_pattern_table/>800  ; Sprite pattern table
        byte >07,>01                        ; Backdrop color
+       byte >0a,name_table/>400            ; Name table 2
+       byte >0b,tile_attr_table/>40        ; Tile attribute table 2
+       byte >1a,>30                        ; TL2 vertical scroll offset
        byte >1d,>44                        ; 1K bytes between sprite + tile planes
        byte >1f,>d0                        ; Bitmap enable, fat pixels
        byte >20,bitmap_dst/>40             ; Bitmap address
@@ -509,7 +517,8 @@ vregs2:
        byte >22,bitmap_top                 ; Bitmap y
        byte >23,>00                        ; Bitmap width
        byte >24,bitmap_height              ; Bitmap height
-       byte >31,>6a                        ; ROW30, ECM2 tiles + sprites, real y coord
+       byte >31,>ea                        ; TL2, ROW30, ECM2 tiles + sprites, real y coord
+       byte >32,>01
        byte >33,>03                        ; Stop sprite
        data -1
 *// graphics_mode
@@ -548,7 +557,7 @@ load_palette_loop:
 *      Name table
        li   r0,name_table+(background_image_top_char*screen_width_char)
        li   r1,MD0
-       li   r2,background_image_height_char*screen_width_char
+       li   r2,2*background_image_height_char*screen_width_char
        bl   @vmbw
 *      Tile attributes
        li   r0,tile_attr_table
@@ -733,10 +742,15 @@ bmp:
 gfx_data_1:
        data >1800,>2000                ; width in pixels (2 pixels per fat pixel), height in pixels
        bcopy "barrel.bin"
+       data >2800,>1000
+       bcopy "kart.bin"
 gfx_data_1_end:
        equ  $
+
 barrel_sprite:                         ; 196 bytes
        equ  graphics_data_1
+kart_sprite:                           ; 164 bytes
+       equ  barrel_sprite+196
 
 upper_memory_max:
        equ  $

@@ -4,9 +4,9 @@
 PAL0   DATA >0AAA,>0000,>00B0,>00F0    ;
 PAL1   DATA >0008,>000F,>0700,>00FF    ;
 PAL2   DATA >0C00,>0F00,>0BB0,>0FF0    ;
-PAL3   DATA >0060,>0C0B,>0CCC,>0FFF    ;
+PAL3   DATA >0060,>0666,>0CCC,>0FFF    ;
 PAL4   DATA >039F,>0666,>0CCC,>0000    ;
-PAL5   DATA >055E,>077F,>0C55,>04EE    ;
+PAL5   DATA >0DFF,>04A3,>02E1,>0A30    ;
 PAL6   DATA >0F55,>0F77,>0CB5,>0EC8    ;
 PAL7   DATA >02A3,>0C5B,>0CCC,>0FFF    ;
 PAL8   DATA >0CEF,>0000,>02C4,>06D7    ;
@@ -30,6 +30,12 @@ TAT6   BYTE >04                        ;
 TAT7   BYTE >04                        ;
 TAT8   BYTE >04                        ;
 TAT9   BYTE >04                        ;
+TAT10  BYTE >15                        ;
+TAT11  BYTE >15                        ;
+TAT12  BYTE >15                        ;
+TAT13  BYTE >15                        ;
+TAT14  BYTE >15                        ;
+TAT15  BYTE >15                        ;
 ****************************************
 * Character Patterns Plane 0            
 ****************************************
@@ -43,6 +49,12 @@ P0_6   DATA >FFFF,>FFFF,>FFFF,>FFFF    ;
 P0_7   DATA >0000,>0000,>0112,>2D7F    ;
 P0_8   DATA >0000,>0000,>00A8,>5CB6    ;
 P0_9   DATA >FFFF,>FFFF,>FFFF,>FFFF    ;
+P0_10  DATA >0000,>0000,>0000,>0000    ;
+P0_11  DATA >361C,>1818,>1818,>5AFF    ;
+P0_12  DATA >142E,>7A5F,>7FAF,>7FDF    ;
+P0_13  DATA >1018,>3810,>1058,>FEED    ;
+P0_14  DATA >0000,>0000,>0012,>BFFF    ;
+P0_15  DATA >0000,>0000,>0000,>64FF    ;
 ****************************************
 * Character Patterns Plane 1            
 ****************************************
@@ -56,6 +68,12 @@ P1_6   DATA >0042,>0004,>0002,>0000    ;
 P1_7   DATA >0103,>070F,>1E2D,>5280    ;
 P1_8   DATA >80C0,>E0F0,>F854,>A249    ;
 P1_9   DATA >0002,>2000,>0000,>0800    ;
+P1_10  DATA >0000,>0000,>0000,>0000    ;
+P1_11  DATA >4820,>1818,>1818,>1800    ;
+P1_12  DATA >2850,>04A0,>8050,>8020    ;
+P1_13  DATA >0020,>0010,>1020,>0012    ;
+P1_14  DATA >0000,>0000,>0028,>4000    ;
+P1_15  DATA >0000,>0000,>0000,>1000    ;
 ****************************************
 * Sprite Patterns Plane 0               
 ****************************************
@@ -84,24 +102,64 @@ S1_17  DATA >0000,>0000,>0000,>0708    ;
 MCOUNT DATA 1                          ;
 * == Map #0 ==                          
 MC0    DATA 0                          ;
-MS0    DATA >0020,>0004,>0080          ; Width, Height, Size
+MS0    DATA >0020,>000C,>0180          ; Width, Height, Size
 * -- Map Row 0 --                       
-MD0    DATA >0000,>0000,>0007,>0800    ;
+MD0    DATA >0000,>0000,>0000,>0000    ;
+       DATA >0000,>0000,>0000,>0000    ;
+       DATA >0000,>0000,>0000,>0000    ;
+       DATA >0000,>0000,>0000,>0000    ;
+* -- Map Row 1 --                       
+       DATA >0000,>0000,>0000,>0000    ;
+       DATA >0000,>0000,>0000,>0000    ;
+       DATA >0000,>0000,>0000,>0000    ;
+       DATA >0000,>0000,>0000,>0000    ;
+* -- Map Row 2 --                       
+       DATA >0000,>0000,>0007,>0800    ;
        DATA >0000,>0000,>0000,>0000    ;
        DATA >0000,>0000,>0708,>0000    ;
        DATA >0708,>0000,>0000,>0000    ;
-* -- Map Row 1 --                       
+* -- Map Row 3 --                       
        DATA >0000,>0103,>0105,>0603    ;
        DATA >0000,>0000,>0000,>0000    ;
        DATA >0000,>0001,>0506,>0301    ;
        DATA >0506,>0300,>0000,>0000    ;
-* -- Map Row 2 --                       
+* -- Map Row 4 --                       
        DATA >0001,>0509,>0402,>0906    ;
        DATA >0300,>0000,>0103,>0000    ;
        DATA >0000,>0105,>0209,>0604    ;
        DATA >0202,>0603,>0103,>0000    ;
-* -- Map Row 3 --                       
+* -- Map Row 5 --                       
        DATA >0105,>0202,>0904,>0202    ;
        DATA >0603,>0001,>0506,>0300    ;
        DATA >0001,>0502,>0909,>0206    ;
        DATA >0402,>0906,>0406,>0300    ;
+* -- Map Row 6 --                       
+       DATA >0A0A,>0A0A,>0A0A,>0A0A    ;
+       DATA >0A0A,>0A0A,>0A0A,>0A0A    ;
+       DATA >0A0A,>0A0A,>0A0A,>0A0A    ;
+       DATA >0A0A,>0A0A,>0A0A,>0A0A    ;
+* -- Map Row 7 --                       
+       DATA >0A0A,>0A0A,>0A0A,>0A0A    ;
+       DATA >0A0A,>0A0A,>0A0A,>0A0A    ;
+       DATA >0A0A,>0A0A,>0A0A,>0A0A    ;
+       DATA >0A0A,>0A0A,>0A0A,>0A0A    ;
+* -- Map Row 8 --                       
+       DATA >0A0A,>0A0A,>0A0A,>0A0A    ;
+       DATA >0A0A,>0A0A,>0A0A,>0A0A    ;
+       DATA >0A0A,>0A0A,>0A0A,>0A0A    ;
+       DATA >0A0A,>0A0A,>0A0A,>0A0A    ;
+* -- Map Row 9 --                       
+       DATA >0A0A,>0A0A,>0A0A,>0A0A    ;
+       DATA >0A0A,>0A0A,>0A0A,>0A0A    ;
+       DATA >0A0A,>0A0A,>0A0A,>0A0A    ;
+       DATA >0A0A,>0A0A,>0A0A,>0A0A    ;
+* -- Map Row 10 --                      
+       DATA >0A0A,>0C0A,>0A0A,>0C0C    ;
+       DATA >0A0A,>0C0A,>0A0A,>0A0A    ;
+       DATA >0A0A,>0A0C,>0A0A,>0A0A    ;
+       DATA >0A0A,>0A0A,>0A0C,>0A0A    ;
+* -- Map Row 11 --                      
+       DATA >0E0E,>0B0F,>0E0F,>0B0B    ;
+       DATA >0F0F,>0B0F,>0F0F,>0D0F    ;
+       DATA >0E0F,>0F0B,>0D0F,>0F0E    ;
+       DATA >0F0F,>0D0F,>0F0B,>0F0F    ;
