@@ -187,13 +187,13 @@ main:
 loop:
        bl   @wait_gpu
        bl   @vsync
-       bl   @vsync
        bl   @trigger_gpu
        bl   @display_sprites
        bl   @scroll_background
        bl   @user_input
        bl   @calculate_dx_dy
        bl   @move
+       bl   @collisions
        bl   @upload_gpu_data
        jmp  loop
 
@@ -413,6 +413,28 @@ move:
 
 *********************************************************************************
 *
+* User collisions
+*
+collisions:
+       .proc
+       mov  @x,r0
+       movb @y,r1
+       bl   @get_map_pixel
+       ci   r1,>0200
+       jeq  collisions_1
+       ci   r1,>0a00
+       jne  collisions_2
+collisions_1:
+       s    @vx,@x
+       s    @vy,@y
+       clr  @vx
+       clr  @vy
+collisions_2:
+       .endproc
+*// collisions
+
+*********************************************************************************
+*
 * Upload GPU data
 *
 upload_gpu_data:
@@ -435,6 +457,30 @@ upload_gpu_data:
        bl   @vsww
        .endproc
 *// upload_gpu_data
+
+*********************************************************************************
+*
+* Get map pixel
+*
+* r0: x (FP 8.8)
+* r1: y (FP 8.8)
+*
+* On return r1 MSB contains the pixel value (0-15)
+*
+get_map_pixel:
+       movb r0,r2                      ; XXXXXXXX.xxxxxxxx
+       swpb r2                         ; xxxxxxxx.XXXXXXXX
+       movb r1,r2                      ; YYYYYYYY.XXXXXXXX
+       sla  r2,1                       ; YYYYYYYX.XXXXXXX0
+       srl  r2,3                       ; 000YYYYY.YYXXXXXX
+       movb @bmp(r2),r1                ; Get 2 source pixels
+       andi r0,>0200
+       jne  get_map_pixel_1
+       srl  r1,4
+get_map_pixel_1:
+       andi r1,>0f00
+       rt
+*// get_map_pixel
 
 *********************************************************************************
 *
