@@ -400,8 +400,8 @@ signed_mpy:
        push r2
        mov  r0,r2                      ; Sign
        xor  r1,r2                      ; Sign
-       abs  r0
-       abs  r1
+       abs  r0                         ; Make positive
+       abs  r1                         ; Make positive
        mpy  r1,r0                      ; Multiply
        movb r1,r0                      ; Move MSB of lower word result into MSB of higher word result
        swpb r0                         ; Swap to get MSB and LSB of result into the right places

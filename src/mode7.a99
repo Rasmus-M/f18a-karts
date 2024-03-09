@@ -46,12 +46,31 @@ n_char_patterns:
        equ  16
 n_sprite_patterns:
        equ  2
-max_speed:
-       equ  64
 max_sprite_dist:
        equ  >4000
 min_sprite_dist:
        equ  >0200
+**
+* Car physics
+*
+max_power_road:
+       equ  >00a0
+max_power_terrain:
+       equ  >0018
+max_reverse_road:
+       equ  >0050
+max_reverse_terrain:
+       equ  >000d
+power_factor:
+       equ  >0002
+reverse_factor:
+       equ  >0001
+drag:
+       equ  >00f4
+turn_speed:
+       equ  >0010
+angular_drag:
+       equ  >00f4
 
 **
 * Memory mapped addresses
@@ -155,12 +174,28 @@ vx:                                    ; Velocity vector x (FP 8.8, signed)
        equ  dy+2
 vy:                                    ; Velocity vector y (FP 8.8, signed)
        equ  vx+2
-angle:                                 ; View angle, 0 - 255, higher values rotates clockwise
+angle:                                 ; View angle, 0 - 255, higher values rotates clockwise (FP 8.8)
        equ  vy+2
-speed:                                 ; Speed, -max_speed - max_speed
+angular_velocity:                      ; Angular velocity
        equ  angle+2
-vdp_copy_pad:
+power:                                 ;
+       equ  angular_velocity+2
+reverse:
+       equ  power+2
+max_power:                                 ;
+       equ  reverse+2
+max_reverse:
+       equ  max_power+2
+speed:
+       equ  max_reverse+2
+steering:                              ; User input, -1=left, 1=right
        equ  speed+2
+throttle:                              ; User input, throttle pressed
+       equ  steering+2
+brake:                                 ; User input, brake/reverse pressed
+       equ  throttle+2
+vdp_copy_pad:
+       equ  brake+2
 pad_max:
        equ  vdp_copy_pad+22
 
@@ -180,7 +215,7 @@ main:
 *      Init
        li   r0,init_data
        li   r1,x
-       li   r2,16
+       li   r2,init_data_end-init_data
        bl   @copy
        bl   @calculate_dx_dy
        bl   @upload_gpu_data
@@ -191,7 +226,6 @@ loop:
        bl   @display_sprites
        bl   @scroll_background
        bl   @user_input
-       bl   @calculate_dx_dy
        bl   @move
        bl   @collisions
        bl   @upload_gpu_data
@@ -300,12 +334,14 @@ display_sprites:
 *
 scroll_background:
        .proc
-       mov  @angle,r0
+       mov  @angle,r1
+       srl  r1,8
+       mov  r1,r0
        sla  r0,2
        andi r0,>00ff
        ori  r0,>1900
        bl   @vwtr
-       mov  @angle,r0
+       mov  r1,r0
        sla  r0,1
        andi r0,>00ff
        ori  r0,>1b00
@@ -319,74 +355,38 @@ scroll_background:
 *
 user_input:
        .proc
-       clr  r1
+       clr  @throttle
+       clr  @brake
+       clr  @steering
+*      Fire
        li   r0,JOY_FI
        bl   @check_key
        jeq  user_input_1
-       inc  r1
+       seto @brake
 user_input_1:
 *      Left
        tb   1
        jeq  user_input_2
-       dec  @angle
-       mov  @speed,r0
-       ci   r0,max_speed/2
-       jlt  user_input_3
-       dec  @angle
+       dec  @steering
        jmp  user_input_3
 user_input_2:
 *      Right
        tb   2
        jeq  user_input_3
-       inc @angle
-       mov  @speed,r0
-       ci   r0,max_speed/2
-       jlt  user_input_3
-       inc  @angle
+       inc  @steering
 user_input_3:
 *      Backwards
-       abs  r1
-       jne  user_input_4
        tb   3
-       jeq  user_input_6
+       jeq  user_input_4
+       seto @brake
 user_input_4:
-       mov  @speed,r0
-       ci   r0,-(max_speed-1)
-       jlt  user_input_5
-       dec  r0
-user_input_5:
-       mov  r0,@speed
-       jmp  user_input_8
-user_input_6:
 *      Forwards
        tb   4
-       jeq  user_input_8
-       mov  @speed,r0
-       ci   r0,max_speed-1
-       jgt  user_input_7
-       inc  r0
-user_input_7:
-       mov  r0,@speed
-user_input_8:
+       jeq  user_input_5
+       seto @throttle
+user_input_5:
        .endproc
 *// user_input
-
-*********************************************************************************
-*
-* Calculate directional vector
-*
-calculate_dx_dy:
-       .proc
-*      dx
-       mov  @angle,r1
-       bl   @cos
-       mov  r1,@dx
-*      dy
-       mov  @angle,r1
-       bl   @sin
-       mov  r1,@dy
-       .endproc
-*// calculate_dx_dy
 
 *********************************************************************************
 *
@@ -394,22 +394,122 @@ calculate_dx_dy:
 *
 move:
        .proc
-*      x
-       mov  @dx,r1
+*      Throttle
+       li   r0,power_factor
+       mov  @power,r1
+       abs  @throttle
+       jeq  move_1
+       a    r0,r1                      ; power += power_factor
+       c    r1,@max_power
+       jlt  move_2
+       mov  @max_power,r1
+       jmp  move_2
+move_1:
+       s    r0,r1                       ; power -= power_factor
+       jgt  move_2
+       clr  r1
+move_2:
+       mov  r1,@power
+*      Brake
+       li   r0,reverse_factor
+       mov  @reverse,r1
+       abs  @brake
+       jeq  move_3
+       a    r0,r1                      ; reverse += reverse_factor
+       c    r1,@max_reverse
+       jlt  move_4
+       mov  @max_reverse,r1
+       jmp  move_4
+move_3:
+       s    r0,r1                      ; reverse -= reverse_factor
+       jgt  move_4
+       clr  r1
+move_4:
+       mov  r1,@reverse
+*      Can we turn?
+       mov  @steering,r0
+       jeq  move_9                     ; Not without steering
+       mov  @power,r0
+       jgt  move_5                     ; Yes with power
+       mov  @reverse,r0
+       jeq  move_9                     ; Not without reverse
+*      Angular velocity
+move_5:
+       mov  @angular_velocity,r1
+       c    @power,@reverse
+       jlt  move_7
+*      Angular velocity - forwards direction
+       mov  @steering,r0
+       jlt  move_6
+       ai   r1,turn_speed              ; angular_velocity += turn_speed
+       jmp  move_9
+move_6:
+       ai   r1,-turn_speed             ; angular_velocity -= turn_speed
+       jmp  move_9
+move_7:
+*      Angular velocity - backwards direction
+       mov  @steering,r0
+       jlt  move_8
+       ai   r1,-turn_speed             ; angular_velocity -= turn_speed
+       jmp  move_9
+move_8:
+       ai   r1,turn_speed              ; angular_velocity += turn_speed
+move_9:
+       mov  r1,@angular_velocity
+*      Speed
+       mov  @power,@speed              ; speed = power - reverse
+       s    @reverse,@speed
+*      Directional vector
+       bl   @calculate_dx_dy           ; dx = cos(angle), dy = sin(angle)
+*      Velocity
+       mov  @dx,r1                     ; vx = dx * speed
        mov  @speed,r2
-       sla  r2,2
        bl   @mpy_fp88
-       mov  r1,@vx                     ; vx = dx * speed
+       mov  r1,@vx
+       mov  @dy,r1                     ; vy = dy * speed
+       mov  @speed,r2
+       bl   @mpy_fp88
+       mov  r1,@vy
+*      Position
        a    @vx,@x                     ; x += vx
-*      y
-       mov  @dy,r1
-       mov  @speed,r2
-       sla  r2,2
-       bl   @mpy_fp88
-       mov  r1,@vy                     ; vy = dy * speed
        a    @vy,@y                     ; y += vy
+*      Drag
+       mov  @vx,r1                     ; vx *= drag
+       li   r2,drag
+       bl   @mpy_fp88
+       mov  r1,@vx
+       mov  @vy,r1                     ; vy *= drag
+       li   r2,drag
+       bl   @mpy_fp88
+       mov  r1,@vy
+*      angle
+       a    @angular_velocity,@angle   ; angle += angular_velocity
+*      angular velocity
+       mov  @angular_velocity,r1       ; angular_velocity *= angular_drag
+       li   r2,angular_drag
+       bl   @mpy_fp88
+       mov  r1,@angular_velocity
        .endproc
 *// move
+
+*********************************************************************************
+*
+* Calculate directional vector
+*
+calculate_dx_dy:
+       .proc
+       mov  @angle,r0
+       srl  r0,8
+*      dx
+       mov  r0,r1
+       bl   @cos
+       mov  r1,@dx
+*      dy
+       mov  r0,r1
+       bl   @sin
+       mov  r1,@dy
+       .endproc
+*// calculate_dx_dy
 
 *********************************************************************************
 *
@@ -425,11 +525,19 @@ collisions:
        ci   r1,>0a00
        jne  collisions_2
 collisions_1:
-       s    @vx,@x
-       s    @vy,@y
-       clr  @vx
-       clr  @vy
+*      Collision
+       li   r0,max_power_terrain
+       mov  r0,@max_power
+       li   r0,max_reverse_terrain
+       mov  r0,@max_reverse
+       jmp  collisions_3
 collisions_2:
+*      No collision
+       li   r0,max_power_road
+       mov  r0,@max_power
+       li   r0,max_reverse_road
+       mov  r0,@max_reverse
+collisions_3:
        .endproc
 *// collisions
 
@@ -766,12 +874,19 @@ lower_memory_max:
 init_data:
        data >8800                      ; x
        data >1400                      ; y
+       data >0000                      ; dx
+       data >0000                      ; dy
        data >0000                      ; vx
        data >0000                      ; vy
-       data >0100                      ; dx
-       data >0000                      ; dy
-       data 0                          ; angle
-       data 0                          ; speed
+       data >0000                      ; anglular_velocity
+       data >0000                      ; angle
+       data >0000                      ; v_angle
+       data >0000                      ; power
+       data >0000                      ; reverse
+       data max_power_road             ; max_power
+       data max_reverse_road           ; max_reverse
+init_data_end:
+       equ  $
 
 ***************************************************************************
 *
