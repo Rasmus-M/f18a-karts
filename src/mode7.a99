@@ -102,7 +102,7 @@ bitmap_gap:
        equ  bitmap_base + (bitmap_dst_height * bitmap_width / 2)
 bitmap_src:
        equ  bitmap_gap + (bitmap_gap_height * bitmap_width / 2)
-name_table_2:                          ; Name table 2 (note: we only need 6 rows of this)
+name_table_2:                          ; Name table 2
        equ  bitmap_src + (bitmap_src_height * bitmap_width / 2) ; = >3000
 gpu_data:                              ; Data shared between CPU and GPU (64 bytes)
        equ  >33c0
@@ -111,9 +111,9 @@ name_table:                            ; Name table 1 (note: we only need 6 rows
 tile_attr_table:                       ; Tile attribute table
        equ  >3500
 sprite_attr_table:                     ; Sprite attribute table
+       equ  >3580
+graphics_data_1:                       ; >200 bytes for scaled sprites
        equ  >3600
-graphics_data_1:                       ; >180 bytes for scaled sprites
-       equ  >3680
 pattern_table:                         ; Pattern table
        equ  >3800
 sprite_pattern_table:                  ; Sprite pattern table
