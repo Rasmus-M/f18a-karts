@@ -16,6 +16,8 @@ gpu_prg_high_start:
        xorg gpu_program
 
        li   r15,>47fe                  ; Stack pointer
+       li   r0,>2000
+       socb r0,@>6032                  ; Trigger GPU on VSYNC
 gpu_loop:
        idle
        mov  @gpu_dy,r0                 ; nx = dy
@@ -24,14 +26,7 @@ gpu_loop:
        mov  @gpu_x,r2                  ; x
        mov  @gpu_y,r3                  ; y
        call @draw_bitmap
-
-;       li   r0,barrel_sprite
-;       li   r1,>4248
-;       li   r2,>0DA0
-;       li   r3,>012B
-;       li   r4,>012B
-;       call @draw_scaled_sprite
-
+       li   r0,>8000
        li   r0,gpu_sprites
        mov  r0,@sprite_list_ptr
 gpu_sprite_loop:

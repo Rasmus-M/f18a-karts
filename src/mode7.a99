@@ -22,12 +22,10 @@ screen_width:
        equ  screen_width_char*8
 screen_height:
        equ  screen_height_char*8
-background_image_top_char:
-       equ  0
 background_image_height_char:
        equ  6
 bitmap_top:
-       equ  (background_image_top_char+background_image_height_char)*8
+       equ  background_image_height_char*8
 bitmap_width:
        equ  128
 bitmap_dst_height:
@@ -104,16 +102,18 @@ bitmap_gap:
        equ  bitmap_base + (bitmap_dst_height * bitmap_width / 2)
 bitmap_src:
        equ  bitmap_gap + (bitmap_gap_height * bitmap_width / 2)
-name_table:                            ; Name table (note: we only need 6 rows of this)
+name_table_2:                          ; Name table 2 (note: we only need 6 rows of this)
        equ  bitmap_src + (bitmap_src_height * bitmap_width / 2) ; = >3000
-sprite_attr_table:                     ; Sprite attribute table
-       equ  >3180
 gpu_data:                              ; Data shared between CPU and GPU (64 bytes)
-       equ  >31c0
+       equ  >33c0
+name_table:                            ; Name table 1 (note: we only need 6 rows of this)
+       equ  >3400
 tile_attr_table:                       ; Tile attribute table
-       equ  >3200
-graphics_data_1:                       ; >500 bytes for scaled sprites
-       equ  >3300
+       equ  >3500
+sprite_attr_table:                     ; Sprite attribute table
+       equ  >3600
+graphics_data_1:                       ; >180 bytes for scaled sprites
+       equ  >3680
 pattern_table:                         ; Pattern table
        equ  >3800
 sprite_pattern_table:                  ; Sprite pattern table
@@ -219,10 +219,9 @@ main:
        bl   @copy
        bl   @calculate_dx_dy
        bl   @upload_gpu_data
-loop:
-       bl   @wait_gpu
-       bl   @vsync
        bl   @trigger_gpu
+loop:
+       bl   @vsync
        bl   @display_sprites
        bl   @scroll_background
        bl   @user_input
@@ -661,9 +660,9 @@ vregs2:
        byte >05,sprite_attr_table/>80      ; Sprite attribute table
        byte >06,sprite_pattern_table/>800  ; Sprite pattern table
        byte >07,>01                        ; Backdrop color
-       byte >0a,name_table/>400            ; Name table 2
+       byte >0a,name_table_2/>400          ; Name table 2
        byte >0b,tile_attr_table/>40        ; Tile attribute table 2
-       byte >1a,>30                        ; TL2 vertical scroll offset
+       byte >1a,>00                        ; TL2 vertical scroll offset
        byte >1d,>44                        ; 1K bytes between sprite + tile planes
        byte >1f,>d0                        ; Bitmap enable, fat pixels
        byte >20,bitmap_dst/>40             ; Bitmap address
@@ -672,7 +671,7 @@ vregs2:
        byte >23,>00                        ; Bitmap width
        byte >24,bitmap_height              ; Bitmap height
        byte >31,>ea                        ; TL2, ROW30, ECM2 tiles + sprites, real y coord
-       byte >32,>01
+       byte >32,>01                        ; TL2 not always on top
        byte >33,>03                        ; Stop sprite
        data -1
 *// graphics_mode
@@ -709,10 +708,19 @@ load_palette_loop:
        li   r0,>2f00                   ; Reg 47, DPM = 0, AUTO INC = 0
        bl   @vwtr
 *      Name table
-       li   r0,name_table+(background_image_top_char*screen_width_char)
+       li   r0,name_table
        li   r1,MD0
-       li   r2,2*background_image_height_char*screen_width_char
+       li   r2,background_image_height_char*screen_width_char
        bl   @vmbw
+*      Name table_2
+       li   r0,name_table_2
+       li   r1,MD0+(background_image_height_char*screen_width_char)
+       li   r2,background_image_height_char*screen_width_char
+       bl   @vmbw
+       li   r0,name_table_2+(background_image_height_char*screen_width_char)
+       li   r1,>0a00
+       li   r2,(screen_height_char-background_image_height_char)*screen_width_char
+       bl   @vsmw
 *      Tile attributes
        li   r0,tile_attr_table
        li   r1,TAT0                    ; Use palette 1
