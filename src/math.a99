@@ -1,0 +1,110 @@
+*********************************************************************
+*
+* Fixed point 8.8 multiplication
+*
+* r1: Multiplicand (FP 8.8)
+* r2: Multiplier (FP 8.8)
+*
+* On return r1 contains multiplied value
+* Modifies r3.
+*
+mpy_fp88:
+       mov  r1,r3                      ; Sign
+       xor  r2,r3                      ; Sign
+       abs  r1                         ; Make positive
+       abs  r2                         ; Make positive
+       mpy  r2,r1                      ; Multiply the numbers
+       movb r2,r1                      ; We need the MSB of r2 (decimals)
+       swpb r1                         ; And the LSB of r1 (whole number) in reverse order
+       sla  r3,1                       ; Test sign
+       jnc  mpy_fp88_1                 ; Jump if sign is positive
+       neg  r1                         ; Negate result
+mpy_fp88_1:
+       rt
+*// mpy_fp88
+
+*********************************************************************
+*
+* Unsigned fixed point 8.8 multiplication
+*
+* r1: Multiplicand (FP 8.8)
+* r2: Multiplier (FP 8.8)
+*
+* On return r1 contains multiplied value
+*
+mpy_u_fp88:
+       mpy  r2,r1                      ; Multiply the numbers
+       movb r2,r1                      ; We need the MSB of r2 (decimals)
+       swpb r1                         ; And the LSB of r1 (whole number) in reverse order
+       rt
+*// mpy_u_fp88
+
+*********************************************************************
+*
+* Calculate sine
+*
+* r1: Angle in units of 1/256 of a circle
+*
+* On return r1 contains the sine value in FP 8.8 format
+*
+sin:
+       andi r1,>00ff                   ; Wrap
+       sla  r1,1
+       mov  @sin_table(r1),r1
+       rt
+*// sin
+
+*********************************************************************
+*
+* Calculate cosine
+*
+* r1: Angle in units of 1/256 of a circle
+*
+* On return r1 contains the cosine value in FP 8.8 format
+*        
+cos:
+       ai   r1,64                      ; cos(a) = sin(a + 90 degrees or 64 units)
+       andi r1,>00ff                   ; Wrap
+       sla  r1,1
+       mov  @sin_table(r1),r1
+       rt
+*// cos
+
+*********************************************************************
+*
+*      256 samples of sine wave in FP 8.8 format
+*
+sin_table:
+       data >0000,>0006,>000D,>0013,>0019,>001F,>0026,>002C
+       data >0032,>0038,>003E,>0044,>004A,>0050,>0056,>005C
+       data >0062,>0068,>006D,>0073,>0079,>007E,>0084,>0089
+       data >008E,>0093,>0098,>009D,>00A2,>00A7,>00AC,>00B1
+       data >00B5,>00B9,>00BE,>00C2,>00C6,>00CA,>00CE,>00D1
+       data >00D5,>00D8,>00DC,>00DF,>00E2,>00E5,>00E7,>00EA
+       data >00ED,>00EF,>00F1,>00F3,>00F5,>00F7,>00F8,>00FA
+       data >00FB,>00FC,>00FD,>00FE,>00FF,>00FF,>0100,>0100
+       data >0100,>0100,>0100,>00FF,>00FF,>00FE,>00FD,>00FC
+       data >00FB,>00FA,>00F8,>00F7,>00F5,>00F3,>00F1,>00EF
+       data >00ED,>00EA,>00E7,>00E5,>00E2,>00DF,>00DC,>00D8
+       data >00D5,>00D1,>00CE,>00CA,>00C6,>00C2,>00BE,>00B9
+       data >00B5,>00B1,>00AC,>00A7,>00A2,>009D,>0098,>0093
+       data >008E,>0089,>0084,>007E,>0079,>0073,>006D,>0068
+       data >0062,>005C,>0056,>0050,>004A,>0044,>003E,>0038
+       data >0032,>002C,>0026,>001F,>0019,>0013,>000D,>0006
+       data >0000,>FFFA,>FFF3,>FFED,>FFE7,>FFE1,>FFDA,>FFD4
+       data >FFCE,>FFC8,>FFC2,>FFBC,>FFB6,>FFB0,>FFAA,>FFA4
+       data >FF9E,>FF98,>FF93,>FF8D,>FF87,>FF82,>FF7C,>FF77
+       data >FF72,>FF6D,>FF68,>FF63,>FF5E,>FF59,>FF54,>FF4F
+       data >FF4B,>FF47,>FF42,>FF3E,>FF3A,>FF36,>FF32,>FF2F
+       data >FF2B,>FF28,>FF24,>FF21,>FF1E,>FF1B,>FF19,>FF16
+       data >FF13,>FF11,>FF0F,>FF0D,>FF0B,>FF09,>FF08,>FF06
+       data >FF05,>FF04,>FF03,>FF02,>FF01,>FF01,>FF00,>FF00
+       data >FF00,>FF00,>FF00,>FF01,>FF01,>FF02,>FF03,>FF04
+       data >FF05,>FF06,>FF08,>FF09,>FF0B,>FF0D,>FF0F,>FF11
+       data >FF13,>FF16,>FF19,>FF1B,>FF1E,>FF21,>FF24,>FF28
+       data >FF2B,>FF2F,>FF32,>FF36,>FF3A,>FF3E,>FF42,>FF47
+       data >FF4B,>FF4F,>FF54,>FF59,>FF5E,>FF63,>FF68,>FF6D
+       data >FF72,>FF77,>FF7C,>FF82,>FF87,>FF8D,>FF93,>FF98
+       data >FF9E,>FFA4,>FFAA,>FFB0,>FFB6,>FFBC,>FFC2,>FFC8
+       data >FFCE,>FFD4,>FFDA,>FFE1,>FFE7,>FFED,>FFF3,>FFFA
+*// sin_table

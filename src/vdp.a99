@@ -48,6 +48,26 @@ vsbw:
 
 *********************************************************************
 *
+* VDP Single Word Write
+*
+* R0: Write address in VDP RAM
+* R1: Word sent to VDP RAM
+*
+vsww:
+       swpb r0
+       movb r0,@vdpwa                  ; Send low byte of VDP RAM write address
+       swpb r0
+       ori  r0,>4000                   ; Set read/write bits 14 and 15 to write (01)
+       movb r0,@vdpwa                  ; Send high byte of VDP RAM write address
+       movb r1,*r15                    ; Write MSB to VDP RAM
+       swpb r1
+       movb r1,*r15                    ; Write LSB to VDP RAM
+       swpb r1
+       rt
+*// vsbw
+
+*********************************************************************
+*
 * VDP multiple Byte Write
 *
 * R0: Write address in VDP RAM
@@ -55,7 +75,9 @@ vsbw:
 * R2: Number of bytes to send
 *
 vmbw:
-       movb  @lsb_r0,@vdpwa              ; Send low byte of VDP RAM write address
+       swpb r0
+       movb  r0,@vdpwa              ; Send low byte of VDP RAM write address
+       swpb r0
        ori  r0,>4000                   ; Set read/write bits 14 and 15 to write (01)
        movb r0,@vdpwa                  ; Send high byte of VDP RAM write address
 vmbw_1:
@@ -74,7 +96,9 @@ vmbw_1:
 * R2: Number of bytes to write to VDP RAM
 *
 vsmw:
-       movb  @lsb_r0,@vdpwa              ; Send low byte of VDP RAM write address
+       swpb r0
+       movb r0,@vdpwa              ; Send low byte of VDP RAM write address
+       swpb r0
        ori  r0,>4000                   ; Set read/write bits 14 and 15 to write (01)
        movb r0,@vdpwa                  ; Send high byte of VDP RAM write address
 vsmw_1:
@@ -126,7 +150,9 @@ vsbr:
 * Modifies R0-R2
 *
 vmbr:
-       movb  @lsb_r0,@vdpwa              ; Send low byte of VDP RAM read address
+       swpb r0
+       movb  r0,@vdpwa              ; Send low byte of VDP RAM read address
+       swpb r0
        andi r0,>3fff                   ; Set read/write bits 14 and 15 to read (00)
        movb r0,@vdpwa                  ; Send high byte of VDP RAM read address
        li   r0,vdprd

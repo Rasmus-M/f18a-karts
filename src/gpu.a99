@@ -1,100 +1,467 @@
+       xorg gpu_program_tmp
+
+*      Copy the GPU program into GPU RAM (>4000 - )
+       li   r0,gpu_prg_high_start
+       li   r1,gpu_program
+       li   r2,gpu_prg_high_end - gpu_program  - gpu_program_tmp
+gpu_copy:
+       mov  *r0+,*r1+
+       dect r2
+       jne  gpu_copy
+       b    @gpu_program
+
+gpu_prg_high_start:
+       equ  $
+
        xorg gpu_program
 
        li   r15,>47fe                  ; Stack pointer
+       li   r0,>2000
+       socb r0,@>6032                  ; Trigger GPU on VSYNC
 gpu_loop:
-       call @draw_bitmap
        idle
-       jmp  gpu_loop
+       mov  @gpu_dy,r0                 ; nx = dy
+       neg  r0                         ; nx = -dy
+       mov  @gpu_dx,r1                 ; ny = dx
+       mov  @gpu_x,r2                  ; x
+       mov  @gpu_y,r3                  ; y
+       call @draw_bitmap
+       li   r0,>8000
+       li   r0,gpu_sprites
+       mov  r0,@sprite_list_ptr
+gpu_sprite_loop:
+       mov  @sprite_list_ptr,r3
+       mov  *r3+,r0
+       jeq  gpu_loop                   ; End of sprite list
+       mov  *r3+,r1
+       mov  *r3+,r2
+       mov  r3,@sprite_list_ptr
+       call @draw_sprite
+       jmp  gpu_sprite_loop
 
 *********************************************************************************
 *
-* Draw bitmap
+* Draw a rotated, scaled, bitmap
+*
+* r0: nx is the x-coordinate of the vector orthogonal to the direction vector (FP 8.8)
+* r1: ny is the y-coordinate of the vector orthogonal to the direction vector (FP 8.8)
+* r2: Center x in source map coordinates x (FP 8.8, XXXXXXXX.xxxxxxxx).
+*     Values of 0-255 are within bounds of source map (each wide pixel has two positions).
+* r3: Bottom y in source map coordinates y (FP 8.8, YYYYYYYY.yyyyyyyy).
+*     Values of 0-127 are within bounds of source map.
+*
+* Source address is calculated as 000YYYYY.YYXXXXXX
 *
 draw_bitmap:
-       li   r9,bitmap_base
-       clr  r12
-       clr  r13
-       clr  r14
+*      Init
+       mov  r0,r7                      ; nx
+       mov  r1,r8                      ; ny
+       li   r4,bitmap_dst + (bitmap_dst_height - 1) * (bitmap_width / 2) ; Destination address (bottom row)
+       li   r5,bitmap_dst_height       ; Row index
+       clr  r10                        ; For the destination byte (2 pixels)
+       li   r11,>0200                  ; Bit in x determining left or right pixel
 draw_bitmap_1:
-       li   r0,64
-       a    r13,r0
-       li   r1,64
-       a    r14,r1
-       call @get_map_pixel_gpu
-       movb r0,r12
-       inct r13
-       li   r0,64
-       a    r13,r0
-       li   r1,64
-       a    r14,r1
-       call @get_map_pixel_gpu
-       sla  r12,4
-       socb r12,r0
-       movb r0,*r9+
-       inct r13
-       ci   r13,256
-       jlt  draw_bitmap_1
-       clr  r13
-       inc  r14
-       ci   r14,96
-       jlt  draw_bitmap_1
+       li   r6,bitmap_width/2          ; Column counter
+       push r2                         ; Save x
+       push r3                         ; Save y
+*      Scale factor
+       clr  r0
+       li   r1,>0400
+       div  r5,r0
+       mov  r0,@scale_factor
+*      Scale x
+       mov  r7,r0                      ; nx
+       mov  @scale_factor,r1           ; scale
+       call @signed_mpy                ; Calculate nx * scale in r7
+       mov  r0,r13                     ; stepX = nx * scale
+       sla  r0,6                       ; 64 * stepX
+       s    r0,r2                      ; x -= 64 * stepX (move to left)
+       s    r0,r3                      ; y -= 64 * stepX (move forward)
+*      Scale y
+       mov  r8,r0                      ; ny
+       mov  @scale_factor,r1           ; scale
+       call @signed_mpy                ; Calculate ny * scale in r7
+       mov  r0,r14                     ; stepY = ny * scale
+       sla  r0,6                       ; 64 * stepY
+       s    r0,r3                      ; y -= 64 * stepY (move to left)
+       a    r0,r2                      ; x += 64 * stepY (move forward)
+draw_bitmap_2:
+*      Left destination pixel
+       mov  r2,r9                      ; XXXXXXXX.xxxxxxxx
+       swpb r9                         ; xxxxxxxx.XXXXXXXX
+       movb r3,r9                      ; YYYYYYYY.XXXXXXXX
+       sla  r9,1                       ; YYYYYYYX.XXXXXXX0
+       srl  r9,3                       ; 000YYYYY.YYXXXXXX
+       movb @bitmap_src(r9),r10        ; Get 2 source pixels
+*      Isolate pixel in left nybble
+       coc  r11,r2                     ; Left or right pixel?
+       jne  draw_bitmap_3
+       sla  r10,4                      ; Move right pixel into position
+       jmp  draw_bitmap_3a
+draw_bitmap_3:
+       andi r10,>f000                  ; Isolate left pixel
+draw_bitmap_3a:
+*      Move x and y to next pixel
+       a    r13,r2                     ; x += stepX
+       a    r14,r3                     ; y += stepY
+*      Right destination pixel
+       mov  r2,r9                      ; XXXXXXXX.xxxxxxxx
+       swpb r9                         ; xxxxxxxx.XXXXXXXX
+       movb r3,r9                      ; YYYYYYYY.XXXXXXXX
+       sla  r9,1                       ; YYYYYYYX.XXXXXXX0
+       srl  r9,3                       ; 000YYYYY.YYXXXXXX
+       movb @bitmap_src(r9),r12        ; Get 2 source pixels
+*      Isolate pixel in right nybble
+       coc  r11,r2                     ; Left or right pixel?
+       jeq  draw_bitmap_4
+       srl  r12,4                      ; Move left pixel into position
+       jmp  draw_bitmap_4a
+draw_bitmap_4:
+       andi r12,>0f00                  ; Isolate right pixel
+draw_bitmap_4a:
+*      Move x and y to next pixel
+       a    r13,r2                     ; x += stepX
+       a    r14,r3                     ; y += stepY
+*      Write to destination
+       socb r12,r10                    ; Combine left and right pixels
+       movb r10,*r4+                   ; Write byte (2 pixels) to destination
+*      Next column
+       dec  r6                         ; Column counter
+       jne  draw_bitmap_2
+*      Next row
+       pop  r3                         ; Restore y
+       pop  r2                         ; Restore x
+       ai   r4,-bitmap_width           ; Move destination 2 lines up
+       dec  r5                         ; Row counter--
+       jne  draw_bitmap_1
        ret
 *// draw_bitmap
 
+*********************************************************************
+*
+* Draw a sprite as seen from (@gpu_x, @gpu_y)
+* looking in the direction (@gpu_dx, @gpu_dy)
+*
+* r0: Address of sprite graphics data (width, height, bitmap)
+* r1: x position in source map coordinates (FP 8.8, unsigned, 0 <= x < 256)
+* r2: y position in source map coordinates (FP 8.8, unsigned, 0 <= y < 256)
+*
+draw_sprite:
+       mov  r0,@sprite_data
+*      Vector from player to sprite
+       s    @gpu_x,r1                  ; player_x
+       mov  r1,@sprite_dx              ; sprite_x - player_x
+       abs  r1                         ; For a quick check
+       ci   r1,max_sprite_dist         ; If dx is greater then the max distance
+       jgt  draw_sprite_1              ; then leave since dx is always <= distance
+       s    @gpu_y,r2                  ; player_y
+       mov  r2,@sprite_dy              ; sprite_y - player_y
+       abs  r2                         ; For a quick check
+       ci   r2,max_sprite_dist         ; If dy is greater then the max distance
+       jgt  draw_sprite_1              ; then leave since dy is always <= distance
+*      Rotate (sprite_dx, sprite_dy) by (dx, -dy) to make it relative to the player, as if we look out of the x axis
+       mov  @sprite_dx,r0              ; sprite_dx
+       mov  @sprite_dy,r1              ; sprite_dy
+       mov  @gpu_dx,@cos_a             ; cos(a) = player_dx
+       mov  @gpu_dy,@sin_a             ; sin(a) = player_dy
+       neg  @sin_a                     ; -sin(a)
+       call @rotate                    ; Rotated x becomes new sprite z (as seen from player)
+       ci   r2,max_sprite_dist         ; If the sprite is too far away
+       jgt  draw_sprite_1              ; we don't draw it
+       ci   r2,min_sprite_dist         ; If the sprite is too close or behind the player
+       jlt  draw_sprite_1              ; we don't draw it
+       mov  r2,@sprite_z
+*      Calculate scale factor 1 / sprite_z
+       li   r0,>0800                   ; 8.0 as FP 8.8 (using 8 instead of 1 gives higher precision, and fits with size of sprites)
+       mov  r2,r1                      ; sprite_z (positive)
+       call @unsigned_div              ; 8.0 / z
+       mov  r0,@scale_factor           ; scale_factor = 8.0 / z
+*      Projected x is calculated as sprite_x / sprite z = sprite_x * scale_factor
+       mov  r3,r1                      ; Rotated y becomes new sprite x (as seen from player)
+       call @signed_mpy                ; sprite_x * scale_factor
+*      Scale projected x if it is within bounds
+       ci   r0,>07ff                   ; Check for >= 8 (because 16 * 8 = 128)
+       jgt  draw_sprite_1
+       ci   r0,->0800                  ; Check for < -8 (because -16 * 8 = -128)
+       jlt  draw_sprite_1
+       sla  r0,4                       ; Scale projected 16 * sprite_x
+       mov  r0,@sprite_x
+*      Size of scaled sprite
+       mov  @sprite_data,r2            ; Sprite data
+       mov  *r2+,r0                    ; Width in source pixels
+       mov  @scale_factor,r1
+       call @unsigned_mpy              ; Width * scale_factor
+       mov  r0,@sprite_width           ; Scaled width
+       mov  *r2+,r0                    ; Height in source pixels
+       mov  @scale_factor,r1
+       call @unsigned_mpy              ; Height * scale_factor
+       mov  r0,@sprite_height          ; Scaled height
+*      X position on destination bitmap
+       mov  @sprite_x,r1
+       ai   r1,bitmap_width*256        ; Center (not bitmap_width / 2 since there are two positions per pixel)
+       mov  @sprite_width,r0           ; Sprite width
+       srl  r0,1                       ; Width / 2
+       s    r0,r1                      ; sprite_x - width / 2
+*      Check if x is within screen bounds
+       jnc  draw_sprite_1
+*      Y position on destination bitmap
+       mov  @scale_factor,r2
+       sla  r2,5                       ; scale_factor * 32
+       s    @sprite_height,r2          ; Align to bottom
+*      Scale
+       mov  @sprite_z,r3
+       srl  r3,3
+       mov  r3,r4
+*      Draw sprite
+       mov  @sprite_data,r0
+       call @draw_scaled_sprite
+draw_sprite_1:
+       ret
+*// draw sprite
+
+*********************************************************************
+*
+* Draw a scaled sprite on the destination bitmap.
+* Doesn't do any clipping yet!
+*
+* r0: Address of sprite graphics data (width, height, bitmap)
+*     width: in pixels (2 pixels per fat pixel) (FP 8.8)
+*     height: in pixels (FP 8.8)
+*     bitmap: row by row of bytes packed with 2 fat pixels
+* r1: x position (top left corner) in destination map coordinates (FP 8.8)
+* r2: y position (top left corner) in destination map coordinates (FP 8.8)
+* r3: Scale x (FP 8.8)
+* r4: Scale y (FP 8.8)
+*
+draw_scaled_sprite:
+*      Destination address
+       swpb r2                         ; yyyyyyyy.YYYYYYYY
+       movb r1,r2                      ; XXXXXXXX.YYYYYYYY
+       swpb r2                         ; YYYYYYYY.XXXXXXXX
+       sla  r2,2                       ; YYYYYYXX.XXXXXX00
+       srl  r2,4                       ; 000YYYYY.YYXXXXXX
+       ai   r2,bitmap_dst
+*      Init
+       sla  r3,1                       ; Scale x *= 2
+       mov  *r0+,r5                    ; Sprite bitmap width
+       mov  *r0+,r6                    ; Sprite bitmap height
+       clr  r9                         ; For the source byte (2 pixels)
+       clr  r10                        ; For the destination byte (2 pixels)
+       li   r11,>0200                  ; Bit in x determining left or right pixel
+       clr  r8                         ; Source bitmap y
+draw_scaled_sprite_1:
+       mov  r2,r2
+       jlt  draw_scaled_sprite_9
+       push r2
+       clr  r7                         ; Source bitmap x
+       push r1
+       push r0
+       mov  r8,r9                      ; y
+       andi r9,>ff00                   ; int(y)
+       mpy  r5,r9                      ; y * width
+       srl  r9,2                       ; / 4 (since width is in normal pixels there are 4 pixels per byte)
+       a    r9,r0                      ; Add to source address
+draw_scaled_sprite_2:
+       mov  r7,r9
+       srl  r9,10                      ; To byte offset
+       a    r0,r9                      ; Add source address of row
+       movb *r9,r9                     ; Get source byte
+       movb *r2,r10                    ; Get existing destination byte
+       coc  r11,r7                     ; Left or right source pixel?
+       jeq  draw_scaled_sprite_4
+*      Left source pixel
+       andi r9,>f000
+       jeq  draw_scaled_sprite_7       ; Skip pixel if transparent
+       coc  r11,r1
+       jeq  draw_scaled_sprite_3
+*      Left source, left destination
+       andi r10,>0f00
+       jmp  draw_scaled_sprite_6
+draw_scaled_sprite_3:
+*      Left source, right destination
+       srl  r9,4
+       andi r10,>f000
+       jmp  draw_scaled_sprite_6
+draw_scaled_sprite_4:
+*      Right source pixel
+       andi r9,>0f00
+       jeq  draw_scaled_sprite_7       ; Skip pixel if transparent
+       coc  r11,r1
+       jeq  draw_scaled_sprite_5
+*      Right source, left destination
+       sla  r9,4
+       andi r10,>0f00
+       jmp  draw_scaled_sprite_6
+draw_scaled_sprite_5:
+*      Right source, right destination
+       andi r10,>f000
+draw_scaled_sprite_6:
+       socb r9,r10
+;       andi r2,>0fff                   ; Wrap to destination bitmap
+       movb r10,*r2
+draw_scaled_sprite_7:
+       coc  r11,r1
+       jne  draw_scaled_sprite_8
+       inc  r2
+draw_scaled_sprite_8:
+       inv  r1
+       a    r3,r7                      ; x += scale x
+       c    r7,r5                      ; x > width ?
+       jlt  draw_scaled_sprite_2
+       pop  r0
+       pop  r1
+       pop  r2
+draw_scaled_sprite_9:
+       ai   r2,bitmap_width/2          ; Next destination row
+       ci   r2,bitmap_dst+(bitmap_dst_height * bitmap_width / 2)
+       jhe  draw_scaled_sprite_10
+       a    r4,r8                      ; y += scale y
+       c    r8,r6                      ; y > height ?
+       jlt  draw_scaled_sprite_1
+draw_scaled_sprite_10:
+       ret
+*// draw_scaled_sprite
+
 *********************************************************************************
 *
-* Get a pixel from the map (GPU)
+* Rotate a point (x,y) in FP 8.8 format around the origin
 *
-* r0: x coordinate 000000MM MMTTTPPP
-* r1: y coordinate 000000NN NNUUUQQQ
+* r0: x
+* r1: y
+* @cos_a: cosine of the angle, cos(a)
+* @sin_a: sine of the angle, sin(a)
 *
-get_map_pixel_gpu:
-*      Meta tile 00000000NNNNMMMM
-       mov  r1,r2                      ; y
-       srl  r2,2                       ; Map y offset
-       andi r2,>00f0
-       mov  r0,r3                      ; x
-       srl  r3,6                       ; Map x offset
-       a    r3,r2                      ; Map offset
-       movb @map(r2),r2                ; Meta tile index in MSB
-       andi r2,>0f00
-       srl  r2,2                       ; Meta tile offset
-       ai   r2,meta_tiles              ; Meta tile address
-*      Tile 0000000000UUUTTT
-       mov  r1,r3                      ; y
-       andi r3,>0038                   ; Tile y offset
-       mov  r0,r4                      ; x
-       srl  r4,3                       ; Tile x offset
-       andi r4,>0007
-       a    r4,r3                      ; Tile offset
-       a    r2,r3                      ; Add Meta tile address to get Tile address
-       movb *r3,r3                     ; Tile index in MSB
-       andi r3,>ff00
-       srl  r3,5                       ; Pattern offset
-*      Pattern
-       mov  r1,r4                      ; y
-       andi r4,>0007                   ; Pixel y offset
-       a    r3,r4                      ; Pattern pixel y offset
-       movb @pattern_table(r4),r5         ; Pattern byte plane 0
-       movb @pattern_table_plane_1(r4),r6 ; Pattern byte plane 1
-       movb @pattern_table_plane_2(r4),r7 ; Pattern byte plane 2
-       andi r0,7                       ; Pixel x offset
-       neg  r0
-       ai   r0,7                       ; Bit shift
-       jeq  get_map_pixel_gpu_1
-       srl  r5,r0
-       srl  r6,r0
-       srl  r7,r0
-get_map_pixel_gpu_1:
-       andi r5,>0100
-       sla  r6,1
-       andi r6,>0200
-       socb r6,r5
-       sla  r7,2
-       andi r7,>0400
-       socb r7,r5
-       movb r5,r0
+* On return
+* r2: x1 = x * cos(a) - y * sin(a)
+* r3: y1 = x * sin(a) + y * cos(a)
+*
+rotate:
+       push r1                         ; Save y
+       push r0                         ; Save x
+       push r1                         ; Save y
+*      x1
+*      mov  r0,r0                      ; x
+       mov  @cos_a,r1                  ; cos(a)
+       call @signed_mpy                ; x * cos(a)
+       mov  r0,r2
+       pop  r0                         ; y
+       mov  @sin_a,r1                  ; sin(a)
+       call @signed_mpy                ; y * sin(a)
+       s    r0,r2                      ; x * cos(a) - y * sin(a)
+*      y1
+       pop  r0                         ; x
+       mov  @sin_a,r1                  ; sin(a)
+       call @signed_mpy                ; x * sin(a)
+       mov  r0,r3
+       pop  r0                         ; y
+       mov  @cos_a,r1                  ; cos(a)
+       call @signed_mpy                ; y * cos(a)
+       a    r0,r3                      ; x * sin(a) + y * cos(a)
        ret
-*// get_map_pixel_gpu
+*// rotate
+
+*********************************************************************************
+*
+* Multiply two unsigned numbers in FP 8.8 format.
+*
+* Input:
+* r0: multiplicand
+* r1: multiplier
+*
+* On return r0 contains the result in FP 8.8 format.
+*
+* Modifies r0-r1
+*
+unsigned_mpy:
+       mpy  r1,r0                      ; Multiply
+       movb r1,r0                      ; Move MSB of lower word result into MSB of higher word result
+       swpb r0                         ; Swap to get MSB and LSB of result into the right places
+       ret
+*// unsigned_mpy
+
+*********************************************************************************
+*
+* Multiply two signed numbers in FP 8.8 format.
+*
+* Input:
+* r0: multiplicand
+* r1: multiplier
+*
+* On return r0 contains the result in FP 8.8 format.
+*
+* Modifies r0-r1
+*
+signed_mpy:
+       push r2
+       mov  r0,r2                      ; Sign
+       xor  r1,r2                      ; Sign
+       abs  r0                         ; Make positive
+       abs  r1                         ; Make positive
+       mpy  r1,r0                      ; Multiply
+       movb r1,r0                      ; Move MSB of lower word result into MSB of higher word result
+       swpb r0                         ; Swap to get MSB and LSB of result into the right places
+       sla  r2,1                       ; Test sign
+       jnc  signed_mpy_1
+       neg  r0                         ; Negate if sign is minus
+signed_mpy_1:
+       pop r2
+       ret
+*// signed_mpy
+
+*********************************************************************************
+*
+* Divide two unsigned numbers in FP 8.8 format.
+*
+* Input:
+* r0: dividend
+* r1: divisor
+*
+* On return r0 contains the result in FP 8.8 format.
+*
+* Modifies r0-r2
+*
+unsigned_div:
+       mov  r1,r2                      ; Copy divisor
+       jeq  unsigned_div_1             ; Can't divide by zero
+       swpb r0                         ; We need MSB of dividend in r0 LSB
+       clr  r1                         ; Second word of dividend
+       movb r0,r1                      ; We need LSB of dividend in r1 MSB
+       sb   r0,r0                      ; Clear MSB
+       div  r2,r0
+unsigned_div_1:
+       ret
+*// unsigned_div
+
+*********************************************************************
+*
+* Data
+*
+sprite_list_ptr:
+       data gpu_sprites
+sprite_data:
+       data 0
+sprite_dx:
+       data 0
+sprite_dy:
+       data 0
+sprite_x:
+       data 0
+sprite_z:
+       data 0
+sprite_width:
+       data 0
+sprite_height:
+       data 0
+scale_factor:
+       data 0
+dp:
+       data 0
+cos_a:
+       data 0
+sin_a:
+       data 0
+
+gpu_prg_high_end:
+       equ  $
 
        aorg

@@ -1,0 +1,52 @@
+*********************************************************************************
+*
+* Data exchanged between CPU and GPU
+*
+       xorg gpu_data
+gpu_x:                                     ;
+       data >0000
+gpu_y:                                     ;
+       data >0000
+gpu_dx:
+       data >0000
+gpu_dy:
+       data >0000
+
+gpu_sprite_data:
+       equ  0
+gpu_sprite_x:
+       equ  2
+gpu_sprite_y:
+       equ  4
+gpu_sprite_size:
+       equ  6
+
+gpu_sprites:
+       data barrel_sprite
+       data >8c00                      ; x
+       data >0a00                      ; y
+       data barrel_sprite
+       data >8c00                      ; x
+       data >1f00                      ; y
+
+       data kart_sprite
+       data >6800                      ; x
+       data >1000                      ; y
+       data kart_sprite
+       data >6800                      ; x
+       data >1a00                      ; y
+
+       data kart_sprite
+       data >7200                      ; x
+       data >1000                      ; y
+       data kart_sprite
+       data >7200                      ; x
+       data >1a00                      ; y
+
+       data kart_sprite
+       data >7c00                      ; x
+       data >1a00                      ; y
+
+       data 0                          ; end
+
+       aorg
