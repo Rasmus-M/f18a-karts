@@ -318,7 +318,7 @@ display_sprites:
        ai   r1,bitmap_src_top*256
        movb r1,*r15
        mov  @x,r1
-       ai   r1,->1000
+       ai   r1,->1400
        movb r1,*r15
        li   r1,>1000
        movb r1,*r15
@@ -880,15 +880,14 @@ lower_memory_max:
        aorg >a000
 
 init_data:
-       data >8800                      ; x
-       data >1400                      ; y
+       data >8000                      ; x
+       data >1000                      ; y
        data >0000                      ; dx
        data >0000                      ; dy
        data >0000                      ; vx
        data >0000                      ; vy
+       data >8000                      ; angle
        data >0000                      ; anglular_velocity
-       data >0000                      ; angle
-       data >0000                      ; v_angle
        data >0000                      ; power
        data >0000                      ; reverse
        data max_power_road             ; max_power

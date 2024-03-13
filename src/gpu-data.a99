@@ -23,15 +23,30 @@ gpu_sprite_size:
 
 gpu_sprites:
        data barrel_sprite
-       data >ac00                      ; x
+       data >8c00                      ; x
        data >0a00                      ; y
        data barrel_sprite
-       data >ac00                      ; x
+       data >8c00                      ; x
        data >1f00                      ; y
+
        data kart_sprite
-       data >4000                      ; x
-       data >1400                      ; y
+       data >6800                      ; x
+       data >1000                      ; y
+       data kart_sprite
+       data >6800                      ; x
+       data >1a00                      ; y
+
+       data kart_sprite
+       data >7200                      ; x
+       data >1000                      ; y
+       data kart_sprite
+       data >7200                      ; x
+       data >1a00                      ; y
+
+       data kart_sprite
+       data >7c00                      ; x
+       data >1a00                      ; y
+
        data 0                          ; end
 
        aorg
-
