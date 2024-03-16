@@ -48,6 +48,8 @@ max_sprite_dist:
        equ  >4000
 min_sprite_dist:
        equ  >0200
+n_other_carts:
+       equ  5
 **
 * Car physics
 *
@@ -227,6 +229,7 @@ loop:
        bl   @user_input
        bl   @move
        bl   @collisions
+       bl   @move_other_karts
        bl   @upload_gpu_data
        jmp  loop
 
@@ -542,6 +545,28 @@ collisions_3:
 
 *********************************************************************************
 *
+* Move other karts
+*
+move_other_karts:
+       .proc
+       li   r3,other_karts
+       li   r5,n_other_carts
+move_other_karts_1:
+       mov  *r3+,r0
+       mov  *r3+,r1
+       bl   @get_dir_map_vector
+       ai   r3,-4
+       sra  r0,1
+       a    r0,*r3+
+       sra  r1,1
+       a    r1,*r3+
+       dec  r5
+       jne  move_other_karts_1
+       .endproc
+*// move_other_karts
+
+*********************************************************************************
+*
 * Upload GPU data
 *
 upload_gpu_data:
@@ -562,6 +587,19 @@ upload_gpu_data:
        li   r0,gpu_dy
        mov  @dy,r1
        bl   @vsww
+*      Other karts
+       li   r0,gpu_kart_sprites+2
+       li   r1,other_karts
+       li   r2,n_other_carts
+upload_gpu_data_1:
+       bl   @vwad
+       movb *r1+,*r15                  ; x
+       movb *r1+,*r15
+       movb *r1+,*r15                  ; y
+       movb *r1+,*r15
+       ai   r0,gpu_sprite_size
+       dec  r2
+       jne  upload_gpu_data_1
        .endproc
 *// upload_gpu_data
 
@@ -588,6 +626,31 @@ get_map_pixel_1:
        andi r1,>0f00
        rt
 *// get_map_pixel
+
+*********************************************************************************
+*
+* Get directional vector from the map
+*
+* r0: x (FP 8.8)
+* r1: y (FP 8.8)
+*
+* On return r0 contains dx as FP 8.8
+* On return r1 contains dy as FP 8.8
+*
+get_dir_map_vector:
+       srl  r1,4                       ; 0000YYYY.YYYYyyyy
+       andi r1,>07c0                   ; 00000YYY.YY000000
+       srl  r0,10                      ; 00000000.00XXXXXX
+       soc  r0,r1                      ; 00000YYY.YYXXXXXX
+       clr  r2
+       movb @dir_map(r1),r2
+       srl  r2,2
+       mov  @sin_table(r2),r1
+       ai   r2,128
+       andi r2,>01ff
+       mov  @sin_table(r2),r0
+       rt
+*// get_dir_map_vector
 
 *********************************************************************************
 *
@@ -895,6 +958,19 @@ init_data:
 init_data_end:
        equ  $
 
+other_karts:
+       data >6800                      ; x
+       data >1000                      ; y
+       data >6800                      ; x
+       data >1a00                      ; y
+       data >7200                      ; x
+       data >1000                      ; y
+       data >7200                      ; x
+       data >1a00                      ; y
+       data >7c00                      ; x
+       data >1a00                      ; y
+       data -1
+
 ***************************************************************************
 *
 * Data includes
@@ -906,6 +982,8 @@ gpu_data_end:
        equ  $
 bmp:
        bcopy "bitmap.bin"
+dir_map:
+       copy "dir-map.a99"
 
 gfx_data_1:
        data >1800,>2000                ; width in pixels (2 pixels per fat pixel), height in pixels
