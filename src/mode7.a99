@@ -989,7 +989,7 @@ gfx_data_1:
        data >1800,>2000                ; width in pixels (2 pixels per fat pixel), height in pixels
        bcopy "sprites/barrel.bin"
        data >2800,>1000
-       bcopy "sprites/kart.bin"
+       bcopy "sprites/kart-back.bin"
 gfx_data_1_end:
        equ  $
 
