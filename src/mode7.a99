@@ -43,7 +43,7 @@ bitmap_height:
 n_char_patterns:
        equ  16
 n_sprite_patterns:
-       equ  2
+       equ  4
 max_sprite_dist:
        equ  >4000
 min_sprite_dist:
@@ -296,12 +296,19 @@ display_sprites:
        .proc
        li   r0,sprite_attr_table
        bl   @vwad
+       mov  @steering,r0
+       mov  @speed,r1
+       jgt  display_sprites_1
+       neg  r0
+display_sprites_1:
+       sla  r0,2
+       ai   r0,kart_patterns_center
 *      Kart left sprite
        li   r1,>4e60
        mov  r1,*r15
        swpb r1
        mov  r1,*r15
-       li   r1,>1404
+       mov  *r0+,r1
        mov  r1,*r15
        swpb r1
        mov  r1,*r15
@@ -310,7 +317,7 @@ display_sprites:
        mov  r1,*r15
        swpb r1
        mov  r1,*r15
-       li   r1,>1444
+       mov  *r0,r1
        mov  r1,*r15
        swpb r1
        mov  r1,*r15
@@ -330,7 +337,7 @@ display_sprites:
 *      Markers for other karts
        li   r3,other_karts
        li   r5,n_other_carts
-display_sprites_1:
+display_sprites_2:
        mov  *r3+,r0                    ; x
        mov  *r3+,r1                    ; y
        andi r1,>7f00
@@ -345,8 +352,14 @@ display_sprites_1:
        swpb r1
        movb r1,*r15
        dec  r5
-       jne  display_sprites_1
+       jne  display_sprites_2
        .endproc
+kart_patterns_left:
+       data >1c44,>1844
+kart_patterns_center:
+       data >1404,>1444
+kart_patterns_right:
+       data >1804,>1c04
 *// display_sprites
 
 *********************************************************************************
