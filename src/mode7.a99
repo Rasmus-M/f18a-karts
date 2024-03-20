@@ -987,9 +987,9 @@ dir_map:
 
 gfx_data_1:
        data >1800,>2000                ; width in pixels (2 pixels per fat pixel), height in pixels
-       bcopy "barrel.bin"
+       bcopy "sprites/barrel.bin"
        data >2800,>1000
-       bcopy "kart.bin"
+       bcopy "sprites/kart.bin"
 gfx_data_1_end:
        equ  $
 
