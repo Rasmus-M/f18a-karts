@@ -826,6 +826,10 @@ load_palette_loop:
        li   r1,gfx_data_1
        li   r2,gfx_data_1_end-gfx_data_1
        bl   @vmbw
+       li   r0,graphics_data_2
+       li   r1,gfx_data_2
+       li   r2,gfx_data_2_end-gfx_data_2
+       bl   @vmbw
        .endproc
 *// init_vdp_ram
 
@@ -987,16 +991,32 @@ dir_map:
 
 gfx_data_1:
        data >1800,>2000                ; width in pixels (2 pixels per fat pixel), height in pixels
-       bcopy "sprites/barrel.bin"
+       bcopy "sprites/barrel.bin"      ; 196 bytes
        data >2800,>1000
-       bcopy "sprites/kart-back.bin"
+       bcopy "sprites/kart-back.bin"   ; 164 bytes
+       data >2000,>1000
+       bcopy "sprites/kart-left.bin"   ; 132 bytes
 gfx_data_1_end:
-       equ  $
+       equ  $                          ; 492 / 512 bytes
 
-barrel_sprite:                         ; 196 bytes
+gfx_data_2:
+       data >2800,>1000
+       bcopy "sprites/kart-front.bin"  ; 164 bytes
+       data >2000,>1000
+       bcopy "sprites/kart-right.bin"  ; 132 bytes
+gfx_data_2_end:
+       equ  $                          ; 296 / 768 bytes
+
+barrel_sprite:
        equ  graphics_data_1
-kart_sprite:                           ; 164 bytes
+kart_back_sprite:
        equ  barrel_sprite+196
+kart_left_sprite:
+       equ  barrel_sprite+164
+kart_front_sprite:
+       equ  graphics_data_2
+kart_right_sprite:
+       equ  graphics_data_2+164
 
 upper_memory_max:
        equ  $
