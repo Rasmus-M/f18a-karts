@@ -317,16 +317,35 @@ display_sprites:
 *      Marker on source map
        mov  @y,r1
        andi r1,>7f00
-       ai   r1,->1000
+       ai   r1,->0400
        ai   r1,bitmap_src_top*256
        movb r1,*r15
        mov  @x,r1
-       ai   r1,->1400
+       ai   r1,->0800
        movb r1,*r15
        li   r1,>1000
        movb r1,*r15
        swpb r1
        movb r1,*r15
+*      Markers for other karts
+       li   r3,other_karts
+       li   r5,n_other_carts
+display_sprites_1:
+       mov  *r3+,r0                    ; x
+       mov  *r3+,r1                    ; y
+       andi r1,>7f00
+       ai   r1,->0400
+       ai   r1,bitmap_src_top*256
+       movb r1,*r15
+       ai   r0,->0800
+       movb r0,*r15
+       mov  r5,r1
+       ori  r1,>1008
+       movb r1,*r15
+       swpb r1
+       movb r1,*r15
+       dec  r5
+       jne  display_sprites_1
        .endproc
 *// display_sprites
 
@@ -735,7 +754,7 @@ vregs2:
        byte >24,bitmap_height              ; Bitmap height
        byte >31,>ea                        ; TL2, ROW30, ECM2 tiles + sprites, real y coord
        byte >32,>01                        ; TL2 not always on top
-       byte >33,>03                        ; Stop sprite
+       byte >33,>08                        ; Stop sprite
        data -1
 *// graphics_mode
 
@@ -784,6 +803,8 @@ load_palette_loop:
        li   r1,>0a00
        li   r2,(screen_height_char-background_image_height_char)*screen_width_char
        bl   @vsmw
+
+
 *      Tile attributes
        li   r0,tile_attr_table
        li   r1,TAT0                    ; Use palette 1
@@ -1012,11 +1033,11 @@ barrel_sprite:
 kart_back_sprite:
        equ  barrel_sprite+196
 kart_left_sprite:
-       equ  barrel_sprite+164
+       equ  kart_back_sprite+164
 kart_front_sprite:
        equ  graphics_data_2
 kart_right_sprite:
-       equ  graphics_data_2+164
+       equ  kart_front_sprite+164
 
 upper_memory_max:
        equ  $
