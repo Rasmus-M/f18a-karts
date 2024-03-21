@@ -296,6 +296,12 @@ display_sprites:
        .proc
        li   r0,sprite_attr_table
        bl   @vwad
+*      Kart pattern
+       clr  r0
+       mov  @power,r1
+       jeq  display_sprites_1
+       mov  @reverse,r1
+       jeq  display_sprites_1
        mov  @steering,r0
        mov  @speed,r1
        jgt  display_sprites_1
@@ -338,6 +344,7 @@ display_sprites_1:
        li   r3,other_karts
        li   r5,n_other_carts
 display_sprites_2:
+       inct r3                         ; Skip angle
        mov  *r3+,r0                    ; x
        mov  *r3+,r1                    ; y
        andi r1,>7f00
@@ -431,33 +438,33 @@ move:
 *      Throttle
        li   r0,power_factor
        mov  @power,r1
-       abs  @throttle
+       abs  @throttle                  ; Check user input
        jeq  move_1
        a    r0,r1                      ; power += power_factor
        c    r1,@max_power
        jlt  move_2
-       mov  @max_power,r1
+       mov  @max_power,r1              ; Cannot be > max_power
        jmp  move_2
 move_1:
-       s    r0,r1                       ; power -= power_factor
+       s    r0,r1                      ; power -= power_factor
        jgt  move_2
-       clr  r1
+       clr  r1                         ; Cannot be negative
 move_2:
        mov  r1,@power
 *      Brake
        li   r0,reverse_factor
        mov  @reverse,r1
-       abs  @brake
+       abs  @brake                     ; Check user input
        jeq  move_3
        a    r0,r1                      ; reverse += reverse_factor
        c    r1,@max_reverse
        jlt  move_4
-       mov  @max_reverse,r1
+       mov  @max_reverse,r1            ; Cannot be > max_reverse
        jmp  move_4
 move_3:
        s    r0,r1                      ; reverse -= reverse_factor
        jgt  move_4
-       clr  r1
+       clr  r1                         ; Cannot be negative
 move_4:
        mov  r1,@reverse
 *      Can we turn?
@@ -466,7 +473,7 @@ move_4:
        mov  @power,r0
        jgt  move_5                     ; Yes with power
        mov  @reverse,r0
-       jeq  move_9                     ; Not without reverse
+       jeq  move_9                     ; Else not without reverse
 *      Angular velocity
 move_5:
        mov  @angular_velocity,r1
@@ -584,14 +591,16 @@ move_other_karts:
        li   r3,other_karts
        li   r5,n_other_carts
 move_other_karts_1:
-       mov  *r3+,r0
-       mov  *r3+,r1
+       inct r3                         ; Skip angle
+       mov  *r3+,r0                    ; x
+       mov  *r3+,r1                    ; y
        bl   @get_dir_map_vector
-       ai   r3,-4
+       ai   r3,-6
+       mov  r2,*r3+                    ; angle
        sra  r0,1
-       a    r0,*r3+
+       a    r0,*r3+                    ; x += dx
        sra  r1,1
-       a    r1,*r3+
+       a    r1,*r3+                    ; y += dy
        dec  r5
        jne  move_other_karts_1
        .endproc
@@ -620,11 +629,18 @@ upload_gpu_data:
        mov  @dy,r1
        bl   @vsww
 *      Other karts
-       li   r0,gpu_kart_sprites+2
+       li   r0,gpu_kart_sprites
        li   r1,other_karts
        li   r2,n_other_carts
 upload_gpu_data_1:
        bl   @vwad
+       mov  *r1+,r3                    ; angle
+       s    @angle,r3                  ; >ff00
+       srl  r3,13                      ; >0007
+       andi r3,>0006                   ; >0006
+       ai   r3,other_kart_sprites
+       movb *r3+,*r15                  ; Sprite pattern
+       movb *r3+,*r15
        movb *r1+,*r15                  ; x
        movb *r1+,*r15
        movb *r1+,*r15                  ; y
@@ -633,6 +649,11 @@ upload_gpu_data_1:
        dec  r2
        jne  upload_gpu_data_1
        .endproc
+other_kart_sprites:
+       data kart_back_sprite
+       data kart_right_sprite
+       data kart_front_sprite
+       data kart_left_sprite
 *// upload_gpu_data
 
 *********************************************************************************
@@ -666,8 +687,10 @@ get_map_pixel_1:
 * r0: x (FP 8.8)
 * r1: y (FP 8.8)
 *
-* On return r0 contains dx as FP 8.8
-* On return r1 contains dy as FP 8.8
+* On return:
+* r0 contains dx as FP 8.8
+* r1 contains dy as FP 8.8
+* r2 contains the angle (FP 8.8)
 *
 get_dir_map_vector:
        srl  r1,4                       ; 0000YYYY.YYYYyyyy
@@ -675,12 +698,16 @@ get_dir_map_vector:
        srl  r0,10                      ; 00000000.00XXXXXX
        soc  r0,r1                      ; 00000YYY.YYXXXXXX
        clr  r2
-       movb @dir_map(r1),r2
-       srl  r2,2
-       mov  @sin_table(r2),r1
-       ai   r2,128
-       andi r2,>01ff
-       mov  @sin_table(r2),r0
+       movb @dir_map(r1),r2            ; >0000 - >0700
+       srl  r2,2                       ; >0000 - >01c0
+       mov  r2,r1                      ; Save it
+       ai   r2,>0080
+       andi r2,>01c0                   ; >0000 - >01c0
+       mov  @sin_table(r2),r0          ; x = cosine
+       mov  r1,r2
+       mov  @sin_table(r2),r1          ; y = sine
+       srl  r2,1                       ; >0000 - >00e0
+       swpb r2                         ; >0000 - >e000
        rt
 *// get_dir_map_vector
 
@@ -816,8 +843,6 @@ load_palette_loop:
        li   r1,>0a00
        li   r2,(screen_height_char-background_image_height_char)*screen_width_char
        bl   @vsmw
-
-
 *      Tile attributes
        li   r0,tile_attr_table
        li   r1,TAT0                    ; Use palette 1
@@ -997,14 +1022,19 @@ init_data_end:
        equ  $
 
 other_karts:
+       data >8000                      ; angle
        data >6800                      ; x
        data >1000                      ; y
+       data >8000                      ; angle
        data >6800                      ; x
        data >1a00                      ; y
+       data >8000                      ; angle
        data >7200                      ; x
        data >1000                      ; y
+       data >8000                      ; angle
        data >7200                      ; x
        data >1a00                      ; y
+       data >8000                      ; angle
        data >7c00                      ; x
        data >1a00                      ; y
        data -1
