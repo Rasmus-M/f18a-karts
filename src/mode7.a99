@@ -636,6 +636,7 @@ upload_gpu_data_1:
        bl   @vwad
        mov  *r1+,r3                    ; angle
        s    @angle,r3                  ; >ff00
+       ai   r3,>2000                   ; Rotate 45 degrees
        srl  r3,13                      ; >0007
        andi r3,>0006                   ; >0006
        ai   r3,other_kart_sprites
