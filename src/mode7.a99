@@ -330,13 +330,16 @@ display_sprites_1:
 *      Marker on source map
        mov  @y,r1
        andi r1,>7f00
-       ai   r1,->0400
+       ai   r1,->0800
        ai   r1,bitmap_src_top*256
        movb r1,*r15
        mov  @x,r1
-       ai   r1,->0800
+       ai   r1,->0c00
        movb r1,*r15
-       li   r1,>1000
+       mov  @angle,r1
+       srl  r1,5
+       andi r1,>0300
+       ori  r1,>1000
        movb r1,*r15
        swpb r1
        movb r1,*r15
@@ -344,29 +347,34 @@ display_sprites_1:
        li   r3,other_karts
        li   r5,n_other_carts
 display_sprites_2:
-       inct r3                         ; Skip angle
+       mov  *r3+,r2                    ; Angle
        mov  *r3+,r0                    ; x
        mov  *r3+,r1                    ; y
        andi r1,>7f00
-       ai   r1,->0400
+       ai   r1,->0800
        ai   r1,bitmap_src_top*256
        movb r1,*r15
-       ai   r0,->0800
+       ai   r0,->0c00
        movb r0,*r15
-       mov  r5,r1
-       ori  r1,>1008
-       movb r1,*r15
-       swpb r1
-       movb r1,*r15
+       srl  r2,5
+       andi r2,>0300
+       soc  r5,r2
+       ori  r2,>1008
+       movb r2,*r15
+       swpb r2
+       movb r2,*r15
        dec  r5
        jne  display_sprites_2
        .endproc
 kart_patterns_left:
-       data >1c44,>1844
+       data >1c54,>1854
 kart_patterns_center:
-       data >1404,>1444
+       data >1414,>1454
 kart_patterns_right:
-       data >1804,>1c04
+       data >1814,>1c14
+marker_patterns:
+       byte >00,>03,>02,>01
+       byte >00,>03,>02,>01
 *// display_sprites
 
 *********************************************************************************
@@ -776,7 +784,7 @@ vregs2:
        byte >39,>1c                        ; Unlock F18A
        byte >39,>1c                        ; Unlock F18A
        byte >00,>00                        ; Graphics I mode
-       byte >01,>e3                        ; 16K, display on, interrupts enabled
+       byte >01,>e1                        ; 16K, display on, interrupts enabled, 8x8 sprites, magnify
        byte >02,name_table/>400            ; Name table
        byte >03,tile_attr_table/>40        ; Tile attribute table
        byte >04,pattern_table/>800         ; Pattern table
