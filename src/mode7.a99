@@ -43,7 +43,7 @@ bitmap_height:
 n_char_patterns:
        equ  16
 n_sprite_patterns:
-       equ  4
+       equ  7
 max_sprite_dist:
        equ  >4000
 min_sprite_dist:
@@ -120,14 +120,14 @@ pattern_table:                         ; Pattern table
        equ  >3800
 sprite_pattern_table:                  ; Sprite pattern table
        equ  >3800
-graphics_data_2:                       ; >300 bytes for scaled sprites
-       equ  >3900
+graphics_data_2:                       ; >280 bytes for scaled sprites
+       equ  >3980
 pattern_table_p1:                      ; Pattern table plane 1
        equ  >3c00
 sprite_pattern_table_p1:               ; Sprite pattern table plane 1
        equ  >3c00
-graphics_data_3:                       ; >300 bytes for scaled sprites
-       equ  >3d00
+graphics_data_3:                       ; >280 bytes for scaled sprites
+       equ  >3d80
 gpu_program:                           ; Approx. >550 bytes for scaled sprites
        equ  >4000
 
@@ -196,8 +196,14 @@ throttle:                              ; User input, throttle pressed
        equ  steering+2
 brake:                                 ; User input, brake/reverse pressed
        equ  throttle+2
-vdp_copy_pad:
+lap:
        equ  brake+2
+minutes:
+       equ  lap+2
+seconds:
+       equ  minutes+1
+vdp_copy_pad:
+       equ  seconds+1
 pad_max:
        equ  vdp_copy_pad+22
 
@@ -231,6 +237,7 @@ loop:
        bl   @collisions
        bl   @move_other_karts
        bl   @upload_gpu_data
+       bl   @update_time
        jmp  loop
 
 *********************************************************************
@@ -296,6 +303,10 @@ display_sprites:
        .proc
        li   r0,sprite_attr_table
        bl   @vwad
+*      Time
+       li   r1,top_sprite_attrs
+       li   r2,4
+       bl   @vdp_copy_pad
 *      Kart pattern
        clr  r0
        mov  @power,r1
@@ -337,9 +348,10 @@ display_sprites_1:
        ai   r1,->0c00
        movb r1,*r15
        mov  @angle,r1
+       ai   r1,>1000                  ; Rotate 45 degrees
        srl  r1,5
        andi r1,>0300
-       ori  r1,>1000
+       ori  r1,>1008
        movb r1,*r15
        swpb r1
        movb r1,*r15
@@ -356,6 +368,7 @@ display_sprites_2:
        movb r1,*r15
        ai   r0,->0c00
        movb r0,*r15
+       ai   r2,>1000                  ; Rotate 45 degrees
        srl  r2,5
        andi r2,>0300
        soc  r5,r2
@@ -366,15 +379,6 @@ display_sprites_2:
        dec  r5
        jne  display_sprites_2
        .endproc
-kart_patterns_left:
-       data >1c54,>1854
-kart_patterns_center:
-       data >1414,>1454
-kart_patterns_right:
-       data >1814,>1c14
-marker_patterns:
-       byte >00,>03,>02,>01
-       byte >00,>03,>02,>01
 *// display_sprites
 
 *********************************************************************************
@@ -658,12 +662,112 @@ upload_gpu_data_1:
        dec  r2
        jne  upload_gpu_data_1
        .endproc
-other_kart_sprites:
-       data kart_back_sprite
-       data kart_right_sprite
-       data kart_front_sprite
-       data kart_left_sprite
 *// upload_gpu_data
+
+*********************************************************************
+*
+* Update time
+*
+update_time:
+       .proc
+       inc  @frame
+       mov  @frame,r0
+       ci   r0,60
+       jlt  update_time_2
+       clr  @frame
+       ab   @b01,@seconds
+       bl   @display_seconds
+       cb   @seconds,@b60
+       jlt  update_time_2
+       sb   @seconds,@seconds
+       ab   @b01,@minutes
+       bl   @display_time
+update_time_2:
+       .endproc
+*// update_time
+
+*********************************************************************
+*
+* Display lap
+*
+display_lap:
+       .proc
+       li   r1,lap_attrs
+       movb @lap+1,r0
+       bl   @display_number
+       .endproc
+*// display_lap
+
+*********************************************************************
+*
+* Display time
+*
+display_time:
+       .proc
+       bl   @display_minutes
+       bl   @display_seconds
+       .endproc
+*// display_time
+
+*********************************************************************
+*
+* Display minutes
+*
+display_minutes:
+       .proc
+       li   r1,minutes_attrs
+       movb @minutes,r0
+       bl   @display_number
+       .endproc
+*// display_minutes
+
+*********************************************************************
+*
+* Display seconds
+*
+display_seconds:
+       .proc
+       li   r1,seconds_attrs
+       movb @seconds,r0
+       bl   @display_number
+       .endproc
+*// display_seconds
+
+*********************************************************************
+*
+* Display number
+*
+* r0 MSB: number to display
+* r1: Address of attributes in CPU RAM
+*
+display_number:
+       .proc
+       clr  r3
+       mov  r0,r4
+       srl  r4,8
+       li   r0,10
+       div  r0,r3
+       mov  r3,r2
+       bl   @display_digit
+       ai   r1,4
+       mov  r4,r2
+       bl   @display_digit
+       .endproc
+*// display_number
+
+*********************************************************************
+*
+* Display digit
+*
+* r1: Address of attributes in CPU RAM
+* r2: Digit to display
+*
+display_digit:
+       ai   r2,>0020
+       swpb r2
+       movb r2,@2(r1)
+       rt
+*// display_digit
 
 *********************************************************************************
 *
@@ -803,7 +907,7 @@ vregs2:
        byte >24,bitmap_height              ; Bitmap height
        byte >31,>ea                        ; TL2, ROW30, ECM2 tiles + sprites, real y coord
        byte >32,>01                        ; TL2 not always on top
-       byte >33,>08                        ; Stop sprite
+       byte >33,>0f                        ; Stop sprite
        data -1
 *// graphics_mode
 
@@ -868,11 +972,11 @@ load_palette_loop:
        bl   @vmbw
 *      Sprite patterns
        li   r0,16*8+sprite_pattern_table
-       li   r1,S0_16
+       li   r1,S0_4
        li   r2,n_sprite_patterns*32
        bl   @vmbw
        li   r0,16*8+sprite_pattern_table_p1
-       li   r1,S1_16
+       li   r1,S1_4
        li   r2,n_sprite_patterns*32
        bl   @vmbw
 *      Sprites off
@@ -1014,6 +1118,15 @@ lower_memory_max:
 *
        aorg >a000
 
+b01:
+       byte 1
+b60:
+       byte 60
+w60:
+       data 60
+w240:
+       data 240
+
 init_data:
        data >8000                      ; x
        data >1000                      ; y
@@ -1029,6 +1142,20 @@ init_data:
        data max_reverse_road           ; max_reverse
 init_data_end:
        equ  $
+
+top_sprite_attrs:
+       equ  $
+minutes_attrs:
+       byte >00,>00,>20,>0e
+       byte >00,>10,>20,>0e
+       byte >00,>20,>2a,>0e
+seconds_attrs:
+       byte >00,>30,>20,>0e
+       byte >00,>40,>20,>0e
+lap_attrs:
+       byte >00,>d0,>2b,>0e
+       byte >00,>e0,>20,>0e
+       byte >00,>f0,>20,>0e
 
 other_karts:
        data >8000                      ; angle
@@ -1047,6 +1174,19 @@ other_karts:
        data >7c00                      ; x
        data >1a00                      ; y
        data -1
+
+other_kart_sprites:
+       data kart_back_sprite
+       data kart_right_sprite
+       data kart_front_sprite
+       data kart_left_sprite
+
+kart_patterns_left:
+       data >1c54,>1854
+kart_patterns_center:
+       data >1414,>1454
+kart_patterns_right:
+       data >1814,>1c14
 
 ***************************************************************************
 *
@@ -1078,7 +1218,7 @@ gfx_data_2:
        data >2000,>1000
        bcopy "sprites/kart-right.bin"  ; 132 bytes
 gfx_data_2_end:
-       equ  $                          ; 296 / 768 bytes
+       equ  $                          ; 296 / 640 bytes
 
 barrel_sprite:
        equ  graphics_data_1
