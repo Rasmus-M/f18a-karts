@@ -201,9 +201,12 @@ draw_sprite:
        ai   r1,bitmap_width*256        ; Center (not bitmap_width / 2 since there are two positions per pixel)
        mov  @sprite_width,r0           ; Sprite width
        srl  r0,1                       ; Width / 2
+       c    r0,r1
+       jh   draw_sprite_1              ; Check out of screen left
+       mov  r1,r2
+       a    r0,r2
+       joc  draw_sprite_1              ; Check out of screen right
        s    r0,r1                      ; sprite_x - width / 2
-*      Check if x is within screen bounds
-       jnc  draw_sprite_1
 *      Y position on destination bitmap
        mov  @scale_factor,r2
        sla  r2,5                       ; scale_factor * 32
