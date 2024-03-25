@@ -55,11 +55,8 @@ engine_sound_1:
        mov  @frame,r0
        andi r0,3
        jne  engine_sound_4
-       mov  @angular_velocity,r0
+       mov  @skid,r0
        jeq  engine_sound_4
-       mov  @speed,r0
-       ci   r0,128
-       jlt  engine_sound_4
        mov  @frame,r0
        andi r0,4
        jeq  engine_sound_2

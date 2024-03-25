@@ -187,8 +187,10 @@ power:                                 ;
        equ  angular_velocity+2
 reverse:
        equ  power+2
-max_power:                                 ;
+skid:
        equ  reverse+2
+max_power:                                 ;
+       equ  skid+2
 max_reverse:
        equ  max_power+2
 speed:
@@ -336,7 +338,8 @@ display_sprites:
 *      Kart pattern
        clr  r0
        mov  @power,r1
-       jeq  display_sprites_1
+       ci   r1,>0020
+       jlt  display_sprites_1
        mov  @reverse,r1
        jeq  display_sprites_1
        mov  @steering,r0
@@ -344,6 +347,7 @@ display_sprites:
        jgt  display_sprites_1
        neg  r0
 display_sprites_1:
+       mov  r0,@skid
        sla  r0,2
        ai   r0,kart_patterns_center
 *      Kart left sprite
