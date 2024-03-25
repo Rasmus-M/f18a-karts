@@ -8,6 +8,7 @@
 *
 
        copy "macros.a99"
+       copy "sound-defs.a99"
 
 **
 * Constants
@@ -146,6 +147,8 @@ r2lb:
        equ  wrksp+5
 r3lb:
        equ  wrksp+7
+r4lb:
+       equ  wrksp+9
 wrksp2:
        equ  wrksp+>20
 stack:
@@ -202,8 +205,28 @@ minutes:
        equ  lap+2
 seconds:
        equ  minutes+1
-vdp_copy_pad:
+module_speed:
        equ  seconds+1
+snd_channel_1:
+       equ  module_speed+2
+snd_channel_2:
+       equ  snd_channel_1+snd_channel_size
+snd_channel_3:
+       equ  snd_channel_2+snd_channel_size
+snd_channel_4:
+       equ  snd_channel_3+snd_channel_size
+snd_track_1:
+       equ  snd_channel_4+snd_channel_size
+snd_track_2:
+       equ  snd_track_1+snd_track_size
+snd_track_3:
+       equ  snd_track_2+snd_track_size
+speech_ptr:
+       equ  snd_track_3+snd_track_size
+get_speech_status:
+       equ  speech_ptr+2
+vdp_copy_pad:
+       equ  get_speech_status+6
 pad_max:
        equ  vdp_copy_pad+22
 
@@ -238,6 +261,9 @@ loop:
        bl   @move_other_karts
        bl   @upload_gpu_data
        bl   @update_time
+       bl   @engine_sound
+       bl   @module_player
+       bl   @speak
        jmp  loop
 
 *********************************************************************
@@ -833,7 +859,7 @@ one_time_init:
        li   r0,1
        mov  r0,@one
        bl   @clear_pad
-       bl   @copy_vdp_copy_to_pad
+       bl   @copy_code_to_pad
        bl   @graphics_mode
        bl   @init_vdp_ram
        .endproc
@@ -857,15 +883,17 @@ clear_pad_1:
 *
 * Copy VDP copy to PAD
 *
-copy_vdp_copy_to_pad:
+copy_code_to_pad:
+       .proc
        li   r0,vdp_copy
        li   r1,vdp_copy_pad
        li   r2,vdp_copy_end-vdp_copy
-copy_vdp_copy_to_pad_1:
-       mov  *r0+,*r1+
-       dect r2
-       jne copy_vdp_copy_to_pad_1
-       rt
+       bl   @copy
+       li   r0,speech_status_code
+       li   r1,get_speech_status
+       li   r2,speech_status_code_end-speech_status_code
+       bl   @copy
+       .endproc
 *// copy_vdp_copy_to_pad
 
 *********************************************************************************
@@ -1104,6 +1132,10 @@ copy:
 *
        copy "vdp.a99"
        copy "math.a99"
+       copy "sound-player.a99"
+       copy "module-player.a99"
+       copy "sound-fx-routines.a99"
+       copy "speech.a99"
 gpu_prg_start:
        copy "gpu.a99"
 gpu_prg_end:
@@ -1122,10 +1154,6 @@ b01:
        byte 1
 b60:
        byte 60
-w60:
-       data 60
-w240:
-       data 240
 
 init_data:
        data >8000                      ; x
@@ -1201,6 +1229,7 @@ bmp:
        bcopy "bitmap.bin"
 dir_map:
        copy "dir-map.a99"
+       copy "sound-fx.a99"
 
 gfx_data_1:
        data >1800,>2000                ; width in pixels (2 pixels per fat pixel), height in pixels

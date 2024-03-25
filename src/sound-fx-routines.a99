@@ -1,0 +1,89 @@
+*********************************************************************
+*
+* Mute sound
+*
+mute_sound:
+       li   r0,mute_table              ; Mute all
+       li   r2,4
+mute_sound_1:
+       movb *r0+,@sound
+       dec  r2
+       jne  mute_sound_1
+       clr  @snd_channel_1
+       clr  @snd_channel_2
+       clr  @snd_channel_3
+       clr  @snd_channel_4
+*      Return
+       rt
+mute_table:
+       byte >9f, >bf, >df, >ff
+*// mute_sound
+
+*********************************************************************
+*
+* Start sound
+*
+start_sound:
+       .proc
+       li   r0,snd_start
+       li   r1,snd_channel_1
+       bl   @play_snd
+       .endproc
+*// start_sound
+
+*********************************************************************
+*
+* Engine sound
+*
+engine_sound:
+       .proc
+       mov  @frame,r0
+       andi r0,7
+       jne  engine_sound_1
+       li   r0,snd_engine_1
+       li   r1,snd_channel_3
+       mov  @speed,r2
+       abs  r2
+       neg  r2
+       ai   r2,>120
+       bl   @play_snd
+       li   r0,snd_engine_2
+       li   r1,snd_channel_4
+       bl   @play_snd
+*      Skid
+engine_sound_1:
+       mov  @frame,r0
+       andi r0,3
+       jne  engine_sound_4
+       mov  @angular_velocity,r0
+       jeq  engine_sound_4
+       mov  @speed,r0
+       ci   r0,128
+       jlt  engine_sound_4
+       mov  @frame,r0
+       andi r0,4
+       jeq  engine_sound_2
+       li   r0,snd_skid_1
+       li   r2,B5
+       jmp  engine_sound_3
+engine_sound_2:
+       li   r0,snd_skid_2
+       li   r2,D5
+engine_sound_3:
+       li   r1,snd_channel_2
+       bl   @play_snd
+engine_sound_4:
+       .endproc
+*// engine_sound
+
+*********************************************************************
+*
+* Crash sound
+*
+crash_sound:
+       .proc
+       li   r0,snd_crash
+       li   r1,snd_channel_1
+       bl   @play_snd
+       .endproc
+*// crash sound

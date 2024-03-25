@@ -1,0 +1,45 @@
+**
+* Sound FXs
+*
+snd_start:
+       byte T2
+       byte 60                         ; Frames
+       byte 255                        ; Attn start
+       byte 1                          ; Attn step
+       data 0                          ; Freq step
+
+snd_engine_1:
+       byte T3
+       byte 1                          ; Frames
+       byte 255                        ; Attn start
+       byte 0                          ; Attn step
+       data 0                          ; Freq step
+
+snd_engine_2:
+       byte P3
+       byte 8                          ; Frames
+       byte 0                          ; Attn start
+       byte 3                          ; Attn step
+       data 0                          ; Freq step
+
+snd_skid_1:
+       byte T2
+       byte 4                          ; Frames
+       byte 0                          ; Attn start
+       byte 0                          ; Attn step
+       data -2                         ; Freq step
+
+snd_skid_2:
+       byte T2
+       byte 4                          ; Frames
+       byte 0                          ; Attn start
+       byte 0                          ; Attn step
+       data 2                         ; Freq step
+
+snd_crash:
+       byte W2
+       byte 64                         ; Frames
+       byte 0                          ; Attn start
+       byte 3                          ; Attn step
+
+       even
