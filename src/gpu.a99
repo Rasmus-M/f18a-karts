@@ -212,9 +212,9 @@ draw_sprite:
        sla  r2,5                       ; scale_factor * 32
        s    @sprite_height,r2          ; Align to bottom
 *      Scale
-       mov  @sprite_z,r3
-       srl  r3,3
-       mov  r3,r4
+       mov  @sprite_z,r3               ; z
+       srl  r3,3                       ; Scale y = z / 8
+       mov  r3,r4                      ; SCale x = Scale y
 *      Draw sprite
        mov  @sprite_data,r0
        call @draw_scaled_sprite
@@ -225,7 +225,7 @@ draw_sprite_1:
 *********************************************************************
 *
 * Draw a scaled sprite on the destination bitmap.
-* Doesn't do any clipping yet!
+* Only does top/bottom clipping!
 *
 * r0: Address of sprite graphics data (width, height, bitmap)
 *     width: in pixels (2 pixels per fat pixel) (FP 8.8)
@@ -243,29 +243,29 @@ draw_scaled_sprite:
        swpb r2                         ; YYYYYYYY.XXXXXXXX
        sla  r2,2                       ; YYYYYYXX.XXXXXX00
        srl  r2,4                       ; 000YYYYY.YYXXXXXX
-       ai   r2,bitmap_dst
+       ai   r2,bitmap_dst              ; Destination address
 *      Init
        sla  r3,1                       ; Scale x *= 2
-       mov  *r0+,r5                    ; Sprite bitmap width
-       mov  *r0+,r6                    ; Sprite bitmap height
+       mov  *r0+,r5                    ; Source sprite bitmap width
+       mov  *r0+,r6                    ; Source sprite bitmap height
        clr  r9                         ; For the source byte (2 pixels)
        clr  r10                        ; For the destination byte (2 pixels)
        li   r11,>0200                  ; Bit in x determining left or right pixel
        clr  r8                         ; Source bitmap y
 draw_scaled_sprite_1:
-       mov  r2,r2
-       jlt  draw_scaled_sprite_9
-       push r2
+       mov  r2,r2                      ; Destination address
+       jlt  draw_scaled_sprite_9       ; If negative we're above the bitmap and can skip that row
+       push r2                         ; Save destination address
+       push r1                         ; Save x position, which now becomes a flag for whether we write left or right destination pixel
+       push r0                         ; Save source address
        clr  r7                         ; Source bitmap x
-       push r1
-       push r0
-       mov  r8,r9                      ; y
+       mov  r8,r9                      ; Source bitmap y
        andi r9,>ff00                   ; int(y)
        mpy  r5,r9                      ; y * width
        srl  r9,2                       ; / 4 (since width is in normal pixels there are 4 pixels per byte)
        a    r9,r0                      ; Add to source address
 draw_scaled_sprite_2:
-       mov  r7,r9
+       mov  r7,r9                      ; Source bitmap x
        srl  r9,10                      ; To byte offset
        a    r0,r9                      ; Add source address of row
        movb *r9,r9                     ; Get source byte
@@ -273,54 +273,54 @@ draw_scaled_sprite_2:
        coc  r11,r7                     ; Left or right source pixel?
        jeq  draw_scaled_sprite_4
 *      Left source pixel
-       andi r9,>f000
+       andi r9,>f000                   ; Isolate left source pixel
        jeq  draw_scaled_sprite_7       ; Skip pixel if transparent
-       coc  r11,r1
+       coc  r11,r1                     ; Left or right destination pixel?
        jeq  draw_scaled_sprite_3
 *      Left source, left destination
-       andi r10,>0f00
+       andi r10,>0f00                  ; Mask right destination pixel
        jmp  draw_scaled_sprite_6
 draw_scaled_sprite_3:
 *      Left source, right destination
-       srl  r9,4
-       andi r10,>f000
+       srl  r9,4                       ; Move source pixel to right
+       andi r10,>f000                  ; Mask left destination pixel
        jmp  draw_scaled_sprite_6
 draw_scaled_sprite_4:
 *      Right source pixel
-       andi r9,>0f00
+       andi r9,>0f00                   ; Isolate right source pixel
        jeq  draw_scaled_sprite_7       ; Skip pixel if transparent
-       coc  r11,r1
+       coc  r11,r1                     ; Left or right destination pixel?
        jeq  draw_scaled_sprite_5
 *      Right source, left destination
-       sla  r9,4
-       andi r10,>0f00
+       sla  r9,4                       ; Move source pixel to left
+       andi r10,>0f00                  ; Mask right destination pixel
        jmp  draw_scaled_sprite_6
 draw_scaled_sprite_5:
 *      Right source, right destination
-       andi r10,>f000
+       andi r10,>f000                  ; Mask left destination pixel
 draw_scaled_sprite_6:
        socb r9,r10
-;       andi r2,>0fff                   ; Wrap to destination bitmap
-       movb r10,*r2
+;      andi r2,>0fff                   ; Wrap to destination bitmap
+       movb r10,*r2                    ; Write pixel to destination
 draw_scaled_sprite_7:
-       coc  r11,r1
+       coc  r11,r1                     ; Left or right destination pixel?
        jne  draw_scaled_sprite_8
-       inc  r2
+       inc  r2                         ; If right then increment destination address
 draw_scaled_sprite_8:
        inv  r1
        a    r3,r7                      ; x += scale x
        c    r7,r5                      ; x > width ?
-       jlt  draw_scaled_sprite_2
-       pop  r0
-       pop  r1
-       pop  r2
+       jlt  draw_scaled_sprite_2       ; Loop until width is reached
+       pop  r0                         ; Restore source address
+       pop  r1                         ; Restore x position
+       pop  r2                         ; Restore destination address
 draw_scaled_sprite_9:
-       ai   r2,bitmap_width/2          ; Next destination row
-       ci   r2,bitmap_dst+(bitmap_dst_height * bitmap_width / 2)
-       jhe  draw_scaled_sprite_10
+       ai   r2,bitmap_width/2          ; Next destination row address
+       ci   r2,bitmap_dst+(bitmap_dst_height * bitmap_width / 2) ; Compare address to bottom of bitmap
+       jhe  draw_scaled_sprite_10      ; Stop if we're outside the bottom row
        a    r4,r8                      ; y += scale y
        c    r8,r6                      ; y > height ?
-       jlt  draw_scaled_sprite_1
+       jlt  draw_scaled_sprite_1       ; Loop until height is reached
 draw_scaled_sprite_10:
        ret
 *// draw_scaled_sprite
