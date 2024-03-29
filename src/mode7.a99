@@ -841,7 +841,8 @@ get_dir_map_vector:
        srl  r0,10                      ; 00000000.00XXXXXX
        soc  r0,r1                      ; 00000YYY.YYXXXXXX
        clr  r2
-       movb @dir_map(r1),r2            ; >0000 - >0700
+       movb @dir_map(r1),r2            ; >0000 - >4f00
+       andi r2,>0700                   ; >0000 - >0700
        srl  r2,2                       ; >0000 - >01c0
        mov  r2,r1                      ; Save it
        ai   r2,>0080

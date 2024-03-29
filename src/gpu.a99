@@ -457,8 +457,6 @@ sprite_height:
        data 0
 scale_factor:
        data 0
-dp:
-       data 0
 cos_a:
        data 0
 sin_a:
