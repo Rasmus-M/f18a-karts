@@ -636,7 +636,7 @@ move_other_karts_1:
        inct r3                         ; Skip angle
        mov  *r3+,r0                    ; x
        mov  *r3+,r1                    ; y
-       bl   @get_dir_map_vector
+       bl   @get_map_direction
        ai   r3,-6
        mov  r2,*r3+                    ; angle
        sra  r0,1
@@ -835,13 +835,9 @@ get_map_pixel_1:
 * r1 contains dy as FP 8.8
 * r2 contains the angle (FP 8.8)
 *
-get_dir_map_vector:
-       srl  r1,4                       ; 0000YYYY.YYYYyyyy
-       andi r1,>07c0                   ; 00000YYY.YY000000
-       srl  r0,10                      ; 00000000.00XXXXXX
-       soc  r0,r1                      ; 00000YYY.YYXXXXXX
-       clr  r2
-       movb @dir_map(r1),r2            ; >0000 - >4f00
+get_map_direction:
+       .proc
+       bl   @get_map_properties
        andi r2,>0700                   ; >0000 - >0700
        srl  r2,2                       ; >0000 - >01c0
        mov  r2,r1                      ; Save it
@@ -852,8 +848,28 @@ get_dir_map_vector:
        mov  @sin_table(r2),r1          ; y = sine
        srl  r2,1                       ; >0000 - >00e0
        swpb r2                         ; >0000 - >e000
+       .endproc
+*// get_map_direction
+
+*********************************************************************************
+*
+* Get map properties byte
+*
+* r0: x (FP 8.8)
+* r1: y (FP 8.8)
+*
+* On return:
+* r2 contains the map properties byte
+*
+get_map_properties:
+       srl  r1,4                       ; 0000YYYY.YYYYyyyy
+       andi r1,>07c0                   ; 00000YYY.YY000000
+       srl  r0,10                      ; 00000000.00XXXXXX
+       soc  r0,r1                      ; 00000YYY.YYXXXXXX
+       clr  r2
+       movb @props(r1),r2            ; >0000 - >4f00
        rt
-*// get_dir_map_vector
+*// get_map_properties
 
 *********************************************************************************
 *
@@ -1231,9 +1247,10 @@ gpu_data_start:
 gpu_data_end:
        equ  $
 bmp:
-       bcopy "bitmap.bin"
-dir_map:
-       copy "dir-map.a99"
+       bcopy "track1-bmp.bin"
+props:
+       copy "track1-props.a99"
+
        copy "sound-fx.a99"
 
 gfx_data_1:
