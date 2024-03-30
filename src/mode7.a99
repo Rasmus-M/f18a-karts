@@ -159,13 +159,13 @@ stack:
 padcon:
        equ  stack+>16                  ; Start of pad constants
 one:
-       equ  padcon
+       equ  padcon                     ; Constant 1
 **
 * PAD variables
 *
 padvar:                                ; Start of pad variables
        equ  one+2
-frame:
+frame:                                 ; Frame counter
        equ padvar
 x:                                     ; World x position (FP 8.8, unsigned, 0 <= x < 256)
        equ  frame+2
@@ -181,19 +181,19 @@ vy:                                    ; Velocity vector y (FP 8.8, signed)
        equ  vx+2
 angle:                                 ; View angle, 0 - 255, higher values rotates clockwise (FP 8.8)
        equ  vy+2
-angular_velocity:                      ; Angular velocity
+angular_velocity:                      ; Angular velocity (FP 8.8)
        equ  angle+2
-power:                                 ;
+power:                                 ; Forwards force (FP 8.8)
        equ  angular_velocity+2
-reverse:
+reverse:                               ; Backwards force (FP 8.8)
        equ  power+2
-skid:
+skid:                                  ; Is kart skidding?
        equ  reverse+2
-max_power:                                 ;
+max_power:                             ; Max power (FP 8.8)
        equ  skid+2
-max_reverse:
+max_reverse:                           ; Max reverse (FP 8.8)
        equ  max_power+2
-speed:
+speed:                                 ; power - reverse (FP 8.8)
        equ  max_reverse+2
 steering:                              ; User input, -1=left, 1=right
        equ  speed+2
@@ -201,11 +201,13 @@ throttle:                              ; User input, throttle pressed
        equ  steering+2
 brake:                                 ; User input, brake/reverse pressed
        equ  throttle+2
-lap:
+lap:                                   ; Current lap
        equ  brake+2
-minutes:
-       equ  lap+2
-seconds:
+lap_progress:                          ; Progress on current lap (0 - 7)
+       equ  lap+1
+minutes:                               ; Minutes passed
+       equ  lap_progress+1
+seconds:                               ; Second of current minute
        equ  minutes+1
 module_speed:
        equ  seconds+1
@@ -253,6 +255,7 @@ main:
        bl   @calculate_dx_dy
        bl   @upload_gpu_data
        bl   @trigger_gpu
+       bl   @display_lap
 loop:
        bl   @vsync
        bl   @display_sprites
@@ -602,25 +605,44 @@ collisions:
        .proc
        mov  @x,r0
        movb @y,r1
-       bl   @get_map_pixel
-       ci   r1,>0200
+       bl   @get_map_properties
+       mov  r2,r3
+       andi r2,>0800                   ; Test if outside track
        jeq  collisions_1
-       ci   r1,>0a00
-       jne  collisions_2
-collisions_1:
-*      Collision
+*      Outside track
        li   r0,max_power_terrain
        mov  r0,@max_power
        li   r0,max_reverse_terrain
        mov  r0,@max_reverse
-       jmp  collisions_3
-collisions_2:
-*      No collision
+       jmp  collisions_2
+collisions_1:
+*      Inside track
        li   r0,max_power_road
        mov  r0,@max_power
        li   r0,max_reverse_road
        mov  r0,@max_reverse
+collisions_2:
+*      Checkpoint / lap
+       andi r3,>7000
+       jeq  collisions_4
+       srl  r3,4
+       sb   @b01,r3
+       cb   r3,@lap_progress
+       jne  collisions_4
+       ab   @b01,r3
+       cb   r3,@b07
+       jlt  collisions_3
+       movb @b00,@lap_progress
+       ab   @b01,@lap
+       bl   @display_lap
+       li   r1,phrase_round_completed
+       bl   @say_phrase
+       jmp  collisions_4
 collisions_3:
+       movb r3,@lap_progress
+       li   r1,phrase_check_point
+       bl   @say_phrase
+collisions_4:
        .endproc
 *// collisions
 
@@ -722,8 +744,8 @@ update_time_2:
 *
 display_lap:
        .proc
-       li   r1,lap_attrs
-       movb @lap+1,r0
+       li   r1,lap_attrs+4
+       movb @lap,r0
        bl   @display_number
        .endproc
 *// display_lap
@@ -859,8 +881,10 @@ get_map_direction:
 * r1: y (FP 8.8)
 *
 * On return:
-* r2 contains the map properties byte
-*
+* r2 contains the map properties byte 0cccxddd where:
+* - ddd direction 0-7
+* - x is set if location is outside track
+* - ccc check point number 1-7, or 0 if not a checkpoint
 get_map_properties:
        srl  r1,4                       ; 0000YYYY.YYYYyyyy
        andi r1,>07c0                   ; 00000YYY.YY000000
@@ -902,7 +926,7 @@ clear_pad_1:
 
 *********************************************************************************
 *
-* Copy VDP copy to PAD
+* Copy code to PAD
 *
 copy_code_to_pad:
        .proc
@@ -915,7 +939,7 @@ copy_code_to_pad:
        li   r2,speech_status_code_end-speech_status_code
        bl   @copy
        .endproc
-*// copy_vdp_copy_to_pad
+*// copy_code_to_pad
 
 *********************************************************************************
 *
@@ -1171,8 +1195,12 @@ lower_memory_max:
 *
        aorg >a000
 
+b00:
+       byte 00
 b01:
        byte 1
+b07:
+       byte 7
 b60:
        byte 60
 
