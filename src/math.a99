@@ -2,23 +2,23 @@
 *
 * Fixed point 8.8 multiplication
 *
-* r1: Multiplicand (FP 8.8)
-* r2: Multiplier (FP 8.8)
+* r0: Multiplicand (FP 8.8)
+* r1: Multiplier (FP 8.8)
 *
-* On return r1 contains multiplied value
-* Modifies r3.
+* On return r0 contains multiplied value
+* Modifies r1-r2.
 *
 mpy_fp88:
-       mov  r1,r3                      ; Sign
-       xor  r2,r3                      ; Sign
+       mov  r0,r2                      ; Sign
+       xor  r1,r2                      ; Sign
+       abs  r0                         ; Make positive
        abs  r1                         ; Make positive
-       abs  r2                         ; Make positive
-       mpy  r2,r1                      ; Multiply the numbers
-       movb r2,r1                      ; We need the MSB of r2 (decimals)
-       swpb r1                         ; And the LSB of r1 (whole number) in reverse order
-       sla  r3,1                       ; Test sign
+       mpy  r1,r0                      ; Multiply the numbers
+       movb r1,r0                      ; We need the MSB of r1 (decimals)
+       swpb r0                         ; And the LSB of r0 (whole number) in reverse order
+       sla  r2,1                       ; Test sign
        jnc  mpy_fp88_1                 ; Jump if sign is positive
-       neg  r1                         ; Negate result
+       neg  r0                         ; Negate result
 mpy_fp88_1:
        rt
 *// mpy_fp88

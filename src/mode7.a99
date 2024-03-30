@@ -548,33 +548,33 @@ move_9:
 *      Directional vector
        bl   @calculate_dx_dy           ; dx = cos(angle), dy = sin(angle)
 *      Velocity
-       mov  @dx,r1                     ; vx = dx * speed
-       mov  @speed,r2
+       mov  @dx,r0                     ; vx = dx * speed
+       mov  @speed,r1
        bl   @mpy_fp88
-       mov  r1,@vx
-       mov  @dy,r1                     ; vy = dy * speed
-       mov  @speed,r2
+       mov  r0,@vx
+       mov  @dy,r0                     ; vy = dy * speed
+       mov  @speed,r1
        bl   @mpy_fp88
-       mov  r1,@vy
+       mov  r0,@vy
 *      Position
        a    @vx,@x                     ; x += vx
        a    @vy,@y                     ; y += vy
 *      Drag
-       mov  @vx,r1                     ; vx *= drag
-       li   r2,drag
+       mov  @vx,r0                     ; vx *= drag
+       li   r1,drag
        bl   @mpy_fp88
-       mov  r1,@vx
-       mov  @vy,r1                     ; vy *= drag
-       li   r2,drag
+       mov  r0,@vx
+       mov  @vy,r0                     ; vy *= drag
+       li   r1,drag
        bl   @mpy_fp88
-       mov  r1,@vy
+       mov  r0,@vy
 *      angle
        a    @angular_velocity,@angle   ; angle += angular_velocity
 *      angular velocity
-       mov  @angular_velocity,r1       ; angular_velocity *= angular_drag
-       li   r2,angular_drag
+       mov  @angular_velocity,r0       ; angular_velocity *= angular_drag
+       li   r1,angular_drag
        bl   @mpy_fp88
-       mov  r1,@angular_velocity
+       mov  r0,@angular_velocity
        .endproc
 *// move
 
@@ -654,20 +654,31 @@ move_other_karts:
        .proc
        li   r3,other_karts
        li   r5,n_other_carts
+       li   r6,other_cart_speeds
 move_other_karts_1:
        inct r3                         ; Skip angle
        mov  *r3+,r0                    ; x
        mov  *r3+,r1                    ; y
        bl   @get_map_direction
-       ai   r3,-6
+       ai   r3,-6                      ; Back to angle
        mov  r2,*r3+                    ; angle
-       sra  r0,1
-       a    r0,*r3+                    ; x += dx
-       sra  r1,1
-       a    r1,*r3+                    ; y += dy
+       mov  r1,r4                      ; Save dy
+       mov  *r6,r1                     ; Get speed
+       bl   @mpy_fp88                  ; dx * speed
+       a    r0,*r3+                    ; x += dx * speed
+       mov  r4,r0                      ; dy
+       mov  *r6+,r1                    ; Get speed
+       bl   @mpy_fp88                  ; dy * speed
+       a    r0,*r3+                    ; y += dy * speed
        dec  r5
        jne  move_other_karts_1
        .endproc
+other_cart_speeds:
+       data >00b0
+       data >0060
+       data >0080
+       data >00a0
+       data >0070
 *// move_other_karts
 
 *********************************************************************************
@@ -980,7 +991,7 @@ vregs2:
        byte >24,bitmap_height              ; Bitmap height
        byte >31,>ea                        ; TL2, ROW30, ECM2 tiles + sprites, real y coord
        byte >32,>01                        ; TL2 not always on top
-       byte >33,>0f                        ; Stop sprite
+       byte >33,>10                        ; Stop sprite
        data -1
 *// graphics_mode
 
