@@ -264,6 +264,7 @@ loop:
        bl   @move
        bl   @collisions
        bl   @move_other_karts
+       bl   @display_rank
        bl   @upload_gpu_data
        bl   @update_time
        bl   @engine_sound
@@ -773,12 +774,37 @@ update_time_2:
 *
 display_lap:
        .proc
-       li   r1,lap_attrs+4
+       li   r1,lap_attrs
        movb @laps,r0
        ab   @b01,r0
        bl   @display_number
        .endproc
 *// display_lap
+
+*********************************************************************
+*
+* Display rank
+*
+display_rank:
+*      Calculate rank
+       mov  @laps,r0                   ; Player's progress
+       li   r1,n_other_carts+1         ; Calculated rank
+       li   r2,n_other_carts
+       li   r3,other_karts+other_kart_progress
+display_rank_1:
+       c    r0,*r3                     ; Compare player's progress to other kart's progress
+       jle  display_rank_2
+       dec  r1                         ; Move rank forward
+display_rank_2:
+       ai   r3,other_kart_size
+       dec  r2
+       jne  display_rank_1
+*      Display rank
+       swpb r1
+       ai   r1,>2000
+       movb r1,@rank_attrs+2
+       rt
+*// display_rank
 
 *********************************************************************
 *
@@ -1256,8 +1282,9 @@ minutes_attrs:
 seconds_attrs:
        byte >00,>30,>20,>0e
        byte >00,>40,>20,>0e
+rank_attrs:
+       byte >00,>80,>26,>0e
 lap_attrs:
-       byte >00,>d0,>2b,>0e
        byte >00,>e0,>20,>0e
        byte >00,>f0,>20,>0e
 
