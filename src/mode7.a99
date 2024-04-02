@@ -395,7 +395,7 @@ display_sprites_2:
        mov  *r3+,r2                    ; Angle
        mov  *r3+,r0                    ; x
        mov  *r3+,r1                    ; y
-       inct r3                         ; Skip progress
+       ai   r3,4                       ; Skip speed and progress
        andi r1,>7f00
        ai   r1,->0800
        ai   r1,bitmap_src_top*256
@@ -655,7 +655,6 @@ move_other_karts:
        .proc
        li   r3,other_karts
        li   r5,n_other_carts
-       li   r6,other_kart_speeds
 move_other_karts_1:
        inct r3                         ; Skip angle
        mov  *r3+,r0                    ; x
@@ -663,16 +662,18 @@ move_other_karts_1:
        bl   @get_map_properties
        .push r2                        ; Save map properties byte
        bl   @get_map_direction
+       mov  *r3,r6                     ; Get speed
        ai   r3,-6                      ; Back to angle
        mov  r2,*r3+                    ; angle
        mov  r1,r4                      ; Save dy
-       mov  *r6,r1                     ; Get speed
+       mov  r6,r1                      ; Speed
        bl   @mpy_fp88                  ; dx * speed
        a    r0,*r3+                    ; x += dx * speed
        mov  r4,r0                      ; dy
-       mov  *r6+,r1                    ; Get speed
+       mov  r6,r1                      ; Speed
        bl   @mpy_fp88                  ; dy * speed
        a    r0,*r3+                    ; y += dy * speed
+       inct r3                         ; Skip speed
 *      Progress
        .pop r2                         ; Restore map properties byte
        andi r2,>7000                   ; Check for checkpoint
@@ -695,12 +696,6 @@ move_other_karts_3:
        dec  r5
        jne  move_other_karts_1
        .endproc
-other_kart_speeds:
-       data >00b0
-       data >0060
-       data >0080
-       data >00a0
-       data >0070
 *// move_other_karts
 
 *********************************************************************************
@@ -743,7 +738,7 @@ upload_gpu_data_1:
        movb *r1+,*r15
        movb *r1+,*r15                  ; y
        movb *r1+,*r15
-       inct r1                         ; Skip progress
+       ai   r1,4                       ; Skip speed and progress
        ai   r0,gpu_sprite_size
        dec  r2
        jne  upload_gpu_data_1
@@ -1272,35 +1267,42 @@ other_kart_x:
        equ  2
 other_kart_y:
        equ  4
-other_kart_progress:
+other_kart_speed:
        equ  6
-other_kart_size:
+other_kart_progress:
        equ  8
+other_kart_size:
+       equ  10
 
 other_karts:
        data >8000                      ; angle
        data >6800                      ; x
        data >1000                      ; y
+       data >00b0                      ; speed
        data >0000                      ; progress
 
        data >8000                      ; angle
        data >6800                      ; x
        data >1a00                      ; y
+       data >0060                      ; speed
        data >0000                      ; progress
 
        data >8000                      ; angle
        data >7200                      ; x
        data >1000                      ; y
+       data >0080                      ; speed
        data >0000                      ; progress
 
        data >8000                      ; angle
        data >7200                      ; x
        data >1a00                      ; y
+       data >00a0                      ; speed
        data >0000                      ; progress
 
        data >8000                      ; angle
        data >7c00                      ; x
        data >1a00                      ; y
+       data >0070                      ; speed
        data >0000                      ; progress
 
 other_kart_sprites:
