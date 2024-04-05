@@ -396,7 +396,7 @@ display_sprites_2:
        mov  *r3+,r2                    ; Angle
        mov  *r3+,r0                    ; x
        mov  *r3+,r1                    ; y
-       ai   r3,4                       ; Skip speed and progress
+       ai   r3,other_kart_size-6       ; Skip other fields
        andi r1,>7f00
        ai   r1,->0800
        ai   r1,bitmap_src_top*256
@@ -570,9 +570,9 @@ move_9:
        li   r1,drag
        bl   @mpy_fp88
        mov  r0,@vy
-*      angle
+*      Angle
        a    @angular_velocity,@angle   ; angle += angular_velocity
-*      angular velocity
+*      Angular velocity
        mov  @angular_velocity,r0       ; angular_velocity *= angular_drag
        li   r1,angular_drag
        bl   @mpy_fp88
@@ -586,14 +586,12 @@ move_9:
 *
 calculate_dx_dy:
        .proc
-       mov  @angle,r0
-       srl  r0,8
 *      dx
-       mov  r0,r1
+       mov  @angle,r1
        bl   @cos
        mov  r1,@dx
 *      dy
-       mov  r0,r1
+       mov  @angle,r1
        bl   @sin
        mov  r1,@dy
        .endproc
@@ -609,13 +607,23 @@ collisions:
        movb @y,r1
        bl   @get_map_properties
        mov  r2,r3
-       andi r2,>0800                   ; Test if outside track
+       andi r2,>8800                   ; Test if outside track
        jeq  collisions_1
 *      Outside track
+       jlt  collisions_0
        li   r0,max_power_terrain
        mov  r0,@max_power
        li   r0,max_reverse_terrain
        mov  r0,@max_reverse
+       jmp  collisions_2
+collisions_0:
+*      Border of map
+       mov  @vx,r0
+       sla  r0,4
+       s    r0,@x
+       mov  @vy,r1
+       sla  r1,4
+       s    r1,@y
        jmp  collisions_2
 collisions_1:
 *      Inside track
@@ -657,33 +665,29 @@ move_other_karts:
        li   r3,other_karts
        li   r5,n_other_carts
 move_other_karts_1:
-       inct r3                         ; Skip angle
-       mov  *r3+,r0                    ; x
-       mov  *r3+,r1                    ; y
+       mov  @other_kart_x(r3),r0       ; x
+       mov  @other_kart_y(r3),r1       ; y
        bl   @get_map_properties
-       .push r2                        ; Save map properties byte
+       mov  r2,r6                      ; Save map properties byte
+       mov  @other_kart_slack(r3),r1
        bl   @get_map_direction
-       mov  *r3,r6                     ; Get speed
-       ai   r3,-6                      ; Back to angle
-       mov  r2,*r3+                    ; angle
+       mov  r2,@other_kart_angle(r3)   ; angle
        mov  r1,r4                      ; Save dy
-       mov  r6,r1                      ; Speed
-       bl   @mpy_fp88                  ; dx * speed
-       a    r0,*r3+                    ; x += dx * speed
+       mov  @other_kart_speed(r3),r1   ; vx
+       bl   @mpy_fp88                  ; dx * vx
+       a    r0,@other_kart_x(r3)       ; x += dx * vx
        mov  r4,r0                      ; dy
-       mov  r6,r1                      ; Speed
-       bl   @mpy_fp88                  ; dy * speed
-       a    r0,*r3+                    ; y += dy * speed
-       inct r3                         ; Skip speed
+       mov  @other_kart_speed(r3),r1   ; vy
+       bl   @mpy_fp88                  ; dy * vy
+       a    r0,@other_kart_y(r3)       ; y += dy * speed
 *      Progress
-       .pop r2                         ; Restore map properties byte
-       andi r2,>7000                   ; Check for checkpoint
+       andi r6,>7000                   ; Check for checkpoint
        jeq  move_other_karts_3
-       srl  r2,4                       ; Checkpoint index
-       mov  *r3,r4                     ; Get progress
-       swpb r4                         ; Swap lap progress to MSB
+       srl  r6,4                       ; Checkpoint index
+       mov  @other_kart_laps(r3),r4    ; Get progress
+       swpb r4                         ; Swap checkpoints to MSB
        ab   @b01,r4                    ; And increment it
-       cb   r4,r2                      ; Check if it matches checkpoint
+       cb   r4,r6                      ; Check if it matches checkpoint
        jne  move_other_karts_3
        cb   r4,@b07                    ; Did we reach the end?
        jlt  move_other_karts_2
@@ -691,9 +695,9 @@ move_other_karts_1:
        ab   @b01,@r4lb                 ; Increment lap
 move_other_karts_2:
        swpb r4                         ; Swap back
-       mov  r4,*r3                     ; And save it
+       mov  r4,@other_kart_laps(r3)    ; And save it
 move_other_karts_3:
-       inct r3                         ; Skip progress
+       ai   r3,other_kart_size         ; Next kart
        dec  r5
        jne  move_other_karts_1
        .endproc
@@ -739,7 +743,7 @@ upload_gpu_data_1:
        movb *r1+,*r15
        movb *r1+,*r15                  ; y
        movb *r1+,*r15
-       ai   r1,4                       ; Skip speed and progress
+       ai   r1,other_kart_size-6       ; Skip other fields
        ai   r0,gpu_sprite_size
        dec  r2
        jne  upload_gpu_data_1
@@ -790,7 +794,7 @@ display_rank:
        mov  @laps,r0                   ; Player's progress
        li   r1,n_other_carts+1         ; Calculated rank
        li   r2,n_other_carts
-       li   r3,other_karts+other_kart_progress
+       li   r3,other_karts+other_kart_laps
 display_rank_1:
        c    r0,*r3                     ; Compare player's progress to other kart's progress
        jle  display_rank_2
@@ -905,6 +909,7 @@ get_map_pixel_1:
 *
 * Get directional vector from map properties byte
 *
+* r1: Angular bias (FP 8.8)
 * r2 MSB: map properties byte
 *
 * On return:
@@ -913,17 +918,16 @@ get_map_pixel_1:
 * r2 contains the angle (FP 8.8)
 *
 get_map_direction:
+       .proc
        andi r2,>0700                   ; >0000 - >0700
-       srl  r2,2                       ; >0000 - >01c0
-       mov  r2,r1                      ; Save it
-       ai   r2,>0080
-       andi r2,>01c0                   ; >0000 - >01c0
-       mov  @sin_table(r2),r0          ; x = cosine
-       mov  r1,r2
-       mov  @sin_table(r2),r1          ; y = sine
-       srl  r2,1                       ; >0000 - >00e0
-       swpb r2                         ; >0000 - >e000
-       rt
+       sla  r2,5                       ; Angle (FP 8.8)
+       a    r1,r2                      ; Add bias
+       mov  r2,r1
+       bl   @cos
+       mov  r1,r0
+       mov  r2,r1
+       bl   @sin
+       .endproc
 *// get_map_direction
 
 *********************************************************************************
@@ -934,10 +938,12 @@ get_map_direction:
 * r1: y (FP 8.8)
 *
 * On return:
-* r2 contains the map properties byte 0cccxddd where:
+* r2 contains the map properties byte bcccxddd where:
 * - ddd direction 0-7
-* - x is set if location is outside track
+* - x is set if location is outside road
 * - ccc check point number 1-7, or 0 if not a checkpoint
+* - b is set if location is at the border of the track
+*
 get_map_properties:
        srl  r1,4                       ; 0000YYYY.YYYYyyyy
        andi r1,>07c0                   ; 00000YYY.YY000000
@@ -1296,40 +1302,49 @@ other_kart_y:
        equ  4
 other_kart_speed:
        equ  6
-other_kart_progress:
+other_kart_slack:
        equ  8
-other_kart_size:
+other_kart_laps:
        equ  10
+other_kart_checkpoints:
+       equ  11
+other_kart_size:
+       equ  12
 
 other_karts:
        data >8000                      ; angle
        data >6800                      ; x
        data >1000                      ; y
        data >00b0                      ; speed
+       data >0100                      ; slack
        data >0000                      ; progress
 
        data >8000                      ; angle
        data >6800                      ; x
        data >1a00                      ; y
        data >0060                      ; speed
+       data >0080                      ; slack
        data >0000                      ; progress
 
        data >8000                      ; angle
        data >7200                      ; x
        data >1000                      ; y
        data >0080                      ; speed
+       data >0000                      ; slack
        data >0000                      ; progress
 
        data >8000                      ; angle
        data >7200                      ; x
        data >1a00                      ; y
        data >00a0                      ; speed
+       data ->0100                     ; slack
        data >0000                      ; progress
 
        data >8000                      ; angle
        data >7c00                      ; x
        data >1a00                      ; y
        data >0070                      ; speed
+       data ->0180                     ; slack
        data >0000                      ; progress
 
 other_kart_sprites:

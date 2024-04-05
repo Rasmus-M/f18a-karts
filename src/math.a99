@@ -43,13 +43,12 @@ mpy_u_fp88:
 *
 * Calculate sine
 *
-* r1: Angle in units of 1/256 of a circle
+* r1: Angle in units of 1/256 of a circle (FP 8.8)
 *
 * On return r1 contains the sine value in FP 8.8 format
 *
 sin:
-       andi r1,>00ff                   ; Wrap
-       sla  r1,1
+       srl  r1,7
        mov  @sin_table(r1),r1
        rt
 *// sin
@@ -63,9 +62,8 @@ sin:
 * On return r1 contains the cosine value in FP 8.8 format
 *        
 cos:
-       ai   r1,64                      ; cos(a) = sin(a + 90 degrees or 64 units)
-       andi r1,>00ff                   ; Wrap
-       sla  r1,1
+       ai   r1,>4000                   ; cos(a) = sin(a + 90 degrees or 64 units)
+       srl  r1,7
        mov  @sin_table(r1),r1
        rt
 *// cos
