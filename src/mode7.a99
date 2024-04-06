@@ -248,6 +248,8 @@ main:
 *      Run GPU program, which moves it into high GPU RAM
        bl   @run_gpu
 *      Init
+       li   r0,music
+       bl   @play_module
        li   r0,init_data
        li   r1,x
        li   r2,init_data_end-init_data
@@ -1344,7 +1346,7 @@ other_karts:
        data >7c00                      ; x
        data >1a00                      ; y
        data >0070                      ; speed
-       data ->0180                     ; slack
+       data ->00c0                     ; slack
        data >0000                      ; progress
 
 other_kart_sprites:
@@ -1404,6 +1406,9 @@ kart_front_sprite:
        equ  graphics_data_2
 kart_right_sprite:
        equ  kart_front_sprite+164
+
+music:
+       copy "theme1-music.a99"
 
 upper_memory_max:
        equ  $

@@ -1,0 +1,348 @@
+theme1_module:
+       data >0003
+       data theme1_track_00
+       data theme1_track_01
+       data >0000
+theme1_track_00:
+       data snd_channel_1
+theme1_track_00_rpt:
+       data theme1_seq_00C8
+       data theme1_seq_00C8
+       data theme1_seq_00C8
+       data theme1_seq_00C8
+       data theme1_seq_00CD
+       data theme1_seq_00D5
+       data theme1_seq_00DD
+       data theme1_seq_00E8
+       data theme1_seq_00EF
+       data theme1_seq_00F7
+       data theme1_seq_00FF
+       data theme1_seq_010A
+       data theme1_seq_0111
+       data theme1_seq_011B
+       data theme1_seq_0125
+       data theme1_seq_010A
+       data >00FF
+       data theme1_track_00_rpt
+       data >0000
+theme1_track_01:
+       data snd_channel_2
+theme1_track_01_rpt:
+       data theme1_seq_012F
+       data theme1_seq_012F
+       data theme1_seq_012F
+       data theme1_seq_012F
+       data theme1_seq_012F
+       data theme1_seq_012F
+       data theme1_seq_012F
+       data theme1_seq_012F
+       data theme1_seq_0139
+       data theme1_seq_0139
+       data theme1_seq_012F
+       data theme1_seq_0143
+       data theme1_seq_014D
+       data theme1_seq_0139
+       data theme1_seq_012F
+       data theme1_seq_012F
+       data >00FF
+       data theme1_track_01_rpt
+       data >0000
+theme1_seq_00C8:
+       data >0020
+       data >0000
+theme1_seq_012F:
+       data theme1_note_0190
+       data >0003
+       data theme1_note_0190
+       data >0003
+       data theme1_note_0193
+       data >0003
+       data theme1_note_0190
+       data >0003
+       data theme1_note_0196
+       data >0003
+       data theme1_note_0190
+       data >0003
+       data theme1_note_0199
+       data >0003
+       data theme1_note_019C
+       data >0003
+       data >0000
+theme1_seq_00CD:
+       data theme1_note_0157
+       data >0003
+       data theme1_note_0157
+       data >0007
+       data theme1_note_015A
+       data >0013
+       data >0000
+theme1_seq_00D5:
+       data theme1_note_015D
+       data >0003
+       data theme1_note_015D
+       data >0007
+       data theme1_note_0160
+       data >0013
+       data >0000
+theme1_seq_00DD:
+       data theme1_note_0163
+       data >0007
+       data theme1_note_0166
+       data >0003
+       data theme1_note_0163
+       data >0003
+       data theme1_note_0169
+       data >0003
+       data theme1_note_0163
+       data >0003
+       data theme1_note_016C
+       data >0003
+       data theme1_note_016F
+       data >0003
+       data >0000
+theme1_seq_00E8:
+       data >0020
+       data >0000
+theme1_seq_00EF:
+       data theme1_note_0157
+       data >0003
+       data theme1_note_0157
+       data >0007
+       data theme1_note_015A
+       data >0013
+       data >0000
+theme1_seq_0139:
+       data theme1_note_0196
+       data >0003
+       data theme1_note_0196
+       data >0003
+       data theme1_note_019F
+       data >0003
+       data theme1_note_0196
+       data >0003
+       data theme1_note_01A2
+       data >0003
+       data theme1_note_0196
+       data >0003
+       data theme1_note_01A5
+       data >0003
+       data theme1_note_01A8
+       data >0003
+       data >0000
+theme1_seq_00F7:
+       data theme1_note_015D
+       data >0003
+       data theme1_note_015D
+       data >0007
+       data theme1_note_0160
+       data >0013
+       data >0000
+theme1_seq_00FF:
+       data theme1_note_0163
+       data >0007
+       data theme1_note_0166
+       data >0003
+       data theme1_note_0163
+       data >0003
+       data theme1_note_0169
+       data >0003
+       data theme1_note_0163
+       data >0003
+       data theme1_note_016C
+       data >0003
+       data theme1_note_016F
+       data >0003
+       data >0000
+theme1_seq_010A:
+       data >0020
+       data >0000
+theme1_seq_0143:
+       data theme1_note_0190
+       data >0003
+       data theme1_note_0190
+       data >0003
+       data theme1_note_0193
+       data >0003
+       data theme1_note_0190
+       data >0003
+       data theme1_note_0196
+       data >0003
+       data theme1_note_0190
+       data >0003
+       data theme1_note_0199
+       data >0003
+       data theme1_note_019C
+       data >0003
+       data >0000
+theme1_seq_0111:
+       data theme1_note_0172
+       data >0007
+       data theme1_note_0175
+       data >0003
+       data theme1_note_0172
+       data >0003
+       data theme1_note_0178
+       data >0003
+       data theme1_note_017B
+       data >000B
+       data >0000
+theme1_seq_014D:
+       data theme1_note_019C
+       data >0003
+       data theme1_note_019C
+       data >0003
+       data theme1_note_01A2
+       data >0003
+       data theme1_note_019C
+       data >0003
+       data theme1_note_01A8
+       data >0003
+       data theme1_note_019C
+       data >0003
+       data theme1_note_01AB
+       data >0003
+       data theme1_note_01AE
+       data >0003
+       data >0000
+theme1_seq_011B:
+       data theme1_note_017E
+       data >0007
+       data theme1_note_0181
+       data >0003
+       data theme1_note_017E
+       data >0003
+       data theme1_note_0184
+       data >0003
+       data theme1_note_0187
+       data >000B
+       data >0000
+theme1_seq_0125:
+       data theme1_note_0163
+       data >0007
+       data theme1_note_018A
+       data >0003
+       data theme1_note_018D
+       data >0003
+       data theme1_note_016F
+       data >0003
+       data theme1_note_0169
+       data >0003
+       data theme1_note_0166
+       data >0003
+       data theme1_note_0163
+       data >0003
+       data >0000
+theme1_note_0190:
+       data theme1_instr_00
+       data A1
+theme1_note_0193:
+       data theme1_instr_00
+       data C1
+theme1_note_0196:
+       data theme1_instr_00
+       data D1
+theme1_note_0199:
+       data theme1_instr_00
+       data D♯1
+theme1_note_019C:
+       data theme1_instr_00
+       data E1
+theme1_note_0157:
+       data theme1_instr_01
+       data A4
+theme1_note_015A:
+       data theme1_instr_02
+       data G3
+theme1_note_015D:
+       data theme1_instr_01
+       data F3
+theme1_note_0160:
+       data theme1_instr_02
+       data E3
+theme1_note_0163:
+       data theme1_instr_03
+       data A2
+theme1_note_0166:
+       data theme1_instr_03
+       data C2
+theme1_note_0169:
+       data theme1_instr_03
+       data D2
+theme1_note_016C:
+       data theme1_instr_03
+       data D♯2
+theme1_note_016F:
+       data theme1_instr_03
+       data E2
+theme1_note_019F:
+       data theme1_instr_00
+       data F1
+theme1_note_01A2:
+       data theme1_instr_00
+       data G1
+theme1_note_01A5:
+       data theme1_instr_00
+       data G♯1
+theme1_note_01A8:
+       data theme1_instr_00
+       data A2
+theme1_note_0172:
+       data theme1_instr_02
+       data G♯3
+theme1_note_0175:
+       data theme1_instr_02
+       data B4
+theme1_note_0178:
+       data theme1_instr_02
+       data D♯4
+theme1_note_017B:
+       data theme1_instr_02
+       data E4
+theme1_note_01AB:
+       data theme1_instr_00
+       data A♯2
+theme1_note_01AE:
+       data theme1_instr_00
+       data B2
+theme1_note_017E:
+       data theme1_instr_02
+       data F♯3
+theme1_note_0181:
+       data theme1_instr_02
+       data A4
+theme1_note_0184:
+       data theme1_instr_02
+       data C♯4
+theme1_note_0187:
+       data theme1_instr_02
+       data D4
+theme1_note_018A:
+       data theme1_instr_03
+       data A3
+theme1_note_018D:
+       data theme1_instr_03
+       data G2
+theme1_instr_00:
+       byte T2
+       byte 32
+       byte 127
+       byte 4
+       data >0000
+theme1_instr_01:
+       byte T1
+       byte 48
+       byte 63
+       byte 4
+       data >0000
+theme1_instr_02:
+       byte T1
+       byte 192
+       byte 63
+       byte 1
+       data >0000
+theme1_instr_03:
+       byte T1
+       byte 16                         ; Frames
+       byte 48                         ; Atts start
+       byte 0                          ; Atts step
+       data >0000                      ; Freq step
