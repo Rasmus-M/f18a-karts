@@ -18,7 +18,7 @@ snd_engine_1:
 snd_engine_2:
        byte P3
        byte 8                          ; Frames
-       byte 0                          ; Attn start
+       byte 64                         ; Attn start
        byte 3                          ; Attn step
        data 0                          ; Freq step
 

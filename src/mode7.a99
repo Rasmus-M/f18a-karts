@@ -652,8 +652,8 @@ collisions_2:
        jmp  collisions_4
 collisions_3:
        movb r3,@check_points
-       li   r1,phrase_check_point
-       bl   @say_phrase
+;       li   r1,phrase_check_point
+;       bl   @say_phrase
 collisions_4:
        .endproc
 *// collisions
