@@ -28,6 +28,9 @@ gpu_sprites:
        data barrel_sprite
        data >8c00                      ; x
        data >1f00                      ; y
+       data tyres_sprite
+       data >6800                      ; x
+       data >6e00                      ; y
 gpu_kart_sprites:
        data kart_back_sprite
        data >6800                      ; x

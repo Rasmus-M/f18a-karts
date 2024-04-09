@@ -1393,8 +1393,10 @@ gfx_data_2:
        bcopy "sprites/kart-front.bin"  ; 164 bytes
        data >2000,>1000
        bcopy "sprites/kart-right.bin"  ; 132 bytes
+       data >1800,>1800
+       bcopy "sprites/tyres.bin"       ; 148 bytes
 gfx_data_2_end:
-       equ  $                          ; 296 / 640 bytes
+       equ  $                          ; 444 / 640 bytes
 
 barrel_sprite:
        equ  graphics_data_1
@@ -1406,6 +1408,8 @@ kart_front_sprite:
        equ  graphics_data_2
 kart_right_sprite:
        equ  kart_front_sprite+164
+tyres_sprite:
+       equ  kart_right_sprite+132
 
 music:
        copy "theme1-music.a99"
