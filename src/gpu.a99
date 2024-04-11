@@ -26,6 +26,9 @@ gpu_loop:
        mov  @gpu_x,r2                  ; x
        mov  @gpu_y,r3                  ; y
        call @draw_bitmap
+*      Sprites
+       abs  @gpu_display_sprites
+       jeq  gpu_loop
        li   r0,>8000
        li   r0,gpu_sprites
        mov  r0,@sprite_list_ptr

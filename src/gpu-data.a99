@@ -12,6 +12,9 @@ gpu_dx:
 gpu_dy:
        data >0000
 
+gpu_display_sprites:
+       data >0000
+
 gpu_sprite_data:
        equ  0
 gpu_sprite_x:

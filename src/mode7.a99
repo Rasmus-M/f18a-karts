@@ -251,6 +251,7 @@ main:
 *      Init
        li   r0,music
        bl   @play_module
+       bl   @zoom
        bl   @init_level
        bl   @display_time
        bl   @display_lap
@@ -284,8 +285,47 @@ init_level:
        bl   @copy
        bl   @calculate_dx_dy
        bl   @upload_gpu_data
+       li   r0,gpu_display_sprites
+       seto r1
+       bl   @vsww
        .endproc
 *// init_level
+
+*********************************************************************
+*
+* Zoom in on track
+*
+zoom:
+       .proc
+       li   r0,gpu_x
+       li   r1,>8000
+       bl   @vsww
+       li   r0,gpu_y
+       li   r1,>1000
+       bl   @vsww
+       li   r3,>0c00
+zoom_1:
+       bl   @vsync
+*      dx
+       li   r0,->0100
+       mov  r3,r1
+       bl   @mpy_fp88
+       mov  r0,r1
+       li   r0,gpu_dx
+       bl   @vsww
+*      dy
+       li   r0,>0000
+       mov  r3,r1
+       bl   @mpy_fp88
+       mov  r0,r1
+       li   r0,gpu_dy
+       bl   @vsww
+*      loop
+       ai   r3,->0010
+       ci   r3,>0100
+       jhe  zoom_1
+       .endproc
+*// zoom
 
 *********************************************************************
 *
@@ -1308,7 +1348,7 @@ init_data:
        data >0000                      ; vx
        data >0000                      ; vy
        data >8000                      ; angle
-       data >0000                      ; anglular_velocity
+       data >0000                      ; angular_velocity
        data >0000                      ; power
        data >0000                      ; reverse
        data max_power_road             ; max_power
