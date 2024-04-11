@@ -167,8 +167,10 @@ padvar:                                ; Start of pad variables
        equ  one+2
 frame:                                 ; Frame counter
        equ padvar
+frame_count:
+       equ frame+2
 x:                                     ; World x position (FP 8.8, unsigned, 0 <= x < 256)
-       equ  frame+2
+       equ  frame_count+2
 y:                                     ; World y position (FP 8.8, unsigned, 0 <= x < 128)
        equ  x+2
 dx:                                    ; Direction vector x (FP 8.8, signed, -1 <= dx <= 1)
@@ -245,20 +247,75 @@ main:
        li   r10,stack                  ; Setup stack pointer
        li   r15,vdpwd
        bl   @one_time_init
-*      Run GPU program, which moves it into high GPU RAM
-       bl   @run_gpu
+       bl   @run_gpu                   ; Run GPU program, which moves it into high GPU RAM
 *      Init
        li   r0,music
        bl   @play_module
+       bl   @init_level
+       bl   @display_time
+       bl   @display_lap
+       bl   @prepare_to_start
+loop:
+       bl   @game_loop
+       jmp  loop
+
+*********************************************************************************
+*
+* Run GPU program
+*
+run_gpu:
+       .proc
+       li   r0,gpu_program_tmp/256+>3600
+       bl   @vwtr
+       li   r0,gpu_program_tmp%256+>3700
+       bl   @vwtr
+       .endproc
+*// run_gpu
+
+*********************************************************************
+*
+* Prepare to start
+*
+init_level:
+       .proc
        li   r0,init_data
        li   r1,x
        li   r2,init_data_end-init_data
        bl   @copy
        bl   @calculate_dx_dy
        bl   @upload_gpu_data
-       bl   @trigger_gpu
-       bl   @display_lap
-loop:
+       .endproc
+*// init_level
+
+*********************************************************************
+*
+* Prepare to start
+*
+prepare_to_start:
+       .proc
+       bl   @game_loop
+       li   r1,phrase_ready_to_start
+       bl   @say_phrase
+       li   r8,start_notes
+       li   r9,4
+prepare_to_start_1:
+       mov  *r8+,r2
+       bl   @start_sound
+       mov  @w60,@frame_count
+       bl   @wait
+       dec  r9
+       jne  prepare_to_start_1
+       .endproc
+start_notes:
+       data A1,A1,A1,A3
+*// prepare_to_start
+
+*********************************************************************
+*
+* Game loop
+*
+game_loop:
+       .proc
        bl   @vsync
        bl   @display_sprites
        bl   @scroll_background
@@ -272,7 +329,23 @@ loop:
        bl   @engine_sound
        bl   @module_player
        bl   @speak
-       jmp  loop
+       .endproc
+*// game_loop
+
+*********************************************************************
+*
+* Wait for @frame_count frames
+*
+wait:
+       .proc
+wait_1:
+       bl   @vsync
+       bl   @engine_sound
+       bl   @snd_player
+       dec  @frame_count
+       jne  wait_1
+       .endproc
+*// wait
 
 *********************************************************************
 *
@@ -288,46 +361,6 @@ vsync_1:
        movb @vdpsta,r12
        .endproc
 *// vsync
-
-*********************************************************************************
-*
-* Run GPU program
-*
-run_gpu:
-       .proc
-       li   r0,gpu_program_tmp/256+>3600
-       bl   @vwtr
-       li   r0,gpu_program_tmp%256+>3700
-       bl   @vwtr
-       .endproc
-*// run_gpu
-
-*********************************************************************************
-*
-* Wait for the GPU to be idle
-*
-wait_gpu:
-       .proc
-       li   r0,>0f02
-       bl   @vwtr
-wait_gpu_1:
-       movb @vdpsta,r0
-       jlt  wait_gpu_1
-       li   r0,>0f00
-       bl   @vwtr
-       .endproc
-*// wait_gpu
-
-*********************************************************************************
-*
-* Resume GPU after idle
-*
-trigger_gpu:
-       .proc
-       li   r0,>3801
-       bl   @vwtr
-       .endproc
-*// wait_gpu
 
 *********************************************************************************
 *
@@ -1264,6 +1297,8 @@ b07:
        byte 7
 b60:
        byte 60
+w60:
+       data 60
 
 init_data:
        data >8000                      ; x
