@@ -60,31 +60,33 @@ draw_bitmap:
        mov  r0,r7                      ; nx
        mov  r1,r8                      ; ny
        li   r4,bitmap_dst + (bitmap_dst_height - 1) * (bitmap_width / 2) ; Destination address (bottom row)
-       li   r5,bitmap_dst_height       ; Row index
+       li   r5,bitmap_dst_height       ; Row index (63 - 1)
        clr  r10                        ; For the destination byte (2 pixels)
        li   r11,>0200                  ; Bit in x determining left or right pixel
 draw_bitmap_1:
        li   r6,bitmap_width/2          ; Column counter
        push r2                         ; Save x
        push r3                         ; Save y
-*      Scale factor
+*      Scale factor for row
        clr  r0
-       li   r1,>0400
-       div  r5,r0
-       mov  r0,@scale_factor
+       li   r1,>0400                   ; 4.0 (FP 8.8)
+       div  r5,r0                      ; 4.0 / row_index
+       mov  r0,@scale_factor           ; Scale factor is smaller for higher zoom
+                                       ; since it determines how much to move in the source bitmap
+                                       ; for each pixel in the destination bitmap.
 *      Scale x
        mov  r7,r0                      ; nx
        mov  @scale_factor,r1           ; scale
-       call @signed_mpy                ; Calculate nx * scale in r7
-       mov  r0,r13                     ; stepX = nx * scale
+       call @signed_mpy                ; Calculate nx * scale_factor in r0
+       mov  r0,r13                     ; stepX = nx * scale_factor
        sla  r0,6                       ; 64 * stepX
        s    r0,r2                      ; x -= 64 * stepX (move to left)
        s    r0,r3                      ; y -= 64 * stepX (move forward)
 *      Scale y
        mov  r8,r0                      ; ny
        mov  @scale_factor,r1           ; scale
-       call @signed_mpy                ; Calculate ny * scale in r7
-       mov  r0,r14                     ; stepY = ny * scale
+       call @signed_mpy                ; Calculate ny * scale_factor in r0
+       mov  r0,r14                     ; stepY = ny * scale_factor
        sla  r0,6                       ; 64 * stepY
        s    r0,r3                      ; y -= 64 * stepY (move to left)
        a    r0,r2                      ; x += 64 * stepY (move forward)
