@@ -303,24 +303,30 @@ zoom:
        li   r0,gpu_y
        li   r1,>1000
        bl   @vsww
-       li   r3,>0c00
+       li   r3,>1100                   ; Scale
+       li   r4,>8000                   ; Angle
 zoom_1:
        bl   @vsync
+       mov  r4,@angle
+       bl   @scroll_background
 *      dx
-       li   r0,->0100
-       mov  r3,r1
-       bl   @mpy_fp88
+       mov  r3,r0                      ; Scale
+       mov  r4,r1                      ; Angle
+       bl   @cos                       ; cos(a)
+       bl   @mpy_fp88                  ; Scale * cos(a)
        mov  r0,r1
        li   r0,gpu_dx
        bl   @vsww
 *      dy
-       li   r0,>0000
-       mov  r3,r1
-       bl   @mpy_fp88
+       mov  r3,r0                      ; Scale
+       mov  r4,r1                      ; Angle
+       bl   @sin                       ; sin(a)
+       bl   @mpy_fp88                  ; Scale * sin(a)
        mov  r0,r1
        li   r0,gpu_dy
        bl   @vsww
 *      loop
+       ai   r4,>0100
        ai   r3,->0010
        ci   r3,>0100
        jhe  zoom_1
