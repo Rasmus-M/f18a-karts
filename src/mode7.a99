@@ -107,7 +107,7 @@ bitmap_src:
        equ  bitmap_gap + (bitmap_gap_height * bitmap_width / 2)
 name_table_2:                          ; Name table 2
        equ  bitmap_src + (bitmap_src_height * bitmap_width / 2) ; = >3000
-gpu_data:                              ; Data shared between CPU and GPU (64 bytes)
+free_64:                               ; 64 bytes free
        equ  >33c0
 name_table:                            ; Name table 1 (note: we only need 6 rows of this)
        equ  >3400
@@ -115,19 +115,19 @@ tile_attr_table:                       ; Tile attribute table
        equ  >3500
 sprite_attr_table:                     ; Sprite attribute table
        equ  >3580
-graphics_data_1:                       ; >200 bytes for scaled sprites
+graphics_data_1:                       ; >200 bytes for scaled sprites (20 bytes free)
        equ  >3600
-pattern_table:                         ; Pattern table
+pattern_table:                         ; Character pattern table plane 0
        equ  >3800
-sprite_pattern_table:                  ; Sprite pattern table
+sprite_pattern_table:                  ; Sprite pattern table plane 0 (first >80 bytes used for char patterns)
        equ  >3800
-graphics_data_2:                       ; >280 bytes for scaled sprites
+graphics_data_2:                       ; >280 bytes for scaled sprites (196 bytes free)
        equ  >3980
-pattern_table_p1:                      ; Pattern table plane 1
+pattern_table_p1:                      ; Character pattern table plane 1
        equ  >3c00
-sprite_pattern_table_p1:               ; Sprite pattern table plane 1
+sprite_pattern_table_p1:               ; Sprite pattern table plane 1 (first >80 bytes used for char patterns)
        equ  >3c00
-graphics_data_3:                       ; >280 bytes for scaled sprites
+gpu_data:                              ; Data shared between CPU and GPU (>280 bytes)
        equ  >3d80
 gpu_program:                           ; Approx. >550 bytes for scaled sprites
        equ  >4000
@@ -530,6 +530,9 @@ user_input:
 *      Fire
        li   r0,JOY_FI
        bl   @check_key
+       jeq  user_input_1
+       mov  @speed,r0
+       jlt  user_input_1
        jeq  user_input_1
        seto @brake
 user_input_1:
