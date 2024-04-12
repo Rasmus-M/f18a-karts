@@ -53,6 +53,8 @@ min_sprite_dist:
        equ  >0200
 n_other_carts:
        equ  5
+n_laps:
+       equ  5
 **
 * Car physics
 *
@@ -170,8 +172,10 @@ frame:                                 ; Frame counter
        equ padvar
 frame_count:
        equ frame+2
-x:                                     ; World x position (FP 8.8, unsigned, 0 <= x < 256)
+status:
        equ  frame_count+2
+x:                                     ; World x position (FP 8.8, unsigned, 0 <= x < 256)
+       equ  status+2
 y:                                     ; World y position (FP 8.8, unsigned, 0 <= x < 128)
        equ  x+2
 dx:                                    ; Direction vector x (FP 8.8, signed, -1 <= dx <= 1)
@@ -259,7 +263,12 @@ main:
        bl   @prepare_to_start
 loop:
        bl   @game_loop
-       jmp  loop
+       mov  @status,r0
+       jeq  loop
+       li   r0,600
+       mov  r0,@frame_count
+       bl   @wait
+       b    @quit
 
 *********************************************************************************
 *
@@ -405,6 +414,8 @@ wait_1:
        bl   @vsync
        bl   @engine_sound
        bl   @snd_player
+       bl   @speak
+       bl   @check_quit
        dec  @frame_count
        jne  wait_1
        .endproc
@@ -746,13 +757,24 @@ collisions_2:
        movb @b00,@check_points
        ab   @b01,@laps
        bl   @display_lap
+       cb   @laps,@b_n_laps
+       jeq  collisions_2a
+       jgt  collisions_2b
        li   r1,phrase_round_completed
+       jmp  collisions_2c
+collisions_2a:
+       li   r1,phrase_last_round
+       jmp  collisions_2c
+collisions_2b:
+       li   r1,phrase_course_completed
+       inc  @status
+collisions_2c:
        bl   @say_phrase
        jmp  collisions_4
 collisions_3:
        movb r3,@check_points
-;       li   r1,phrase_check_point
-;       bl   @say_phrase
+       li   r1,phrase_check
+       bl   @say_phrase
 collisions_4:
        .endproc
 *// collisions
@@ -1236,6 +1258,28 @@ load_palette_loop:
 
 ***************************************************************************
 *
+* Check quit
+*
+check_quit:
+       clr  r1                         ; Test column 0
+       li   r12,>0024                  ; Address for column selection
+       ldcr r1,3                       ; Select column
+       li   r12,>0006                  ; Address to read rows
+       stcr r1,8
+       andi r1,>1100
+       jeq  quit
+*      Return
+       rt
+*      Quit
+quit   clr  @>83c4                     ; Reset user ISR address
+       seto @>6000                     ; Select first ROM bank
+       li   r0,>3280                   ; Reset F18A
+       bl   @vwtr
+       blwp @>0000
+*// check_quit
+
+***************************************************************************
+*
 * Check key
 *
 * r0: Column in MSB: >0000 - >0700, Row in LSB: >0006 - >0014
@@ -1359,6 +1403,8 @@ b07:
        byte 7
 b60:
        byte 60
+b_n_laps:
+       data (n_laps-1)*256
 w60:
        data 60
 
