@@ -1,6 +1,6 @@
 *********************************************************************
 *
-* Mode 7 demo
+* Mode 7 karts demo
 * For the TI-99/4A home computer
 *
 * January 2024 -
@@ -45,6 +45,8 @@ n_char_patterns:
        equ  16
 n_sprite_patterns:
        equ  7
+max_hw_sprites:
+       equ  16
 max_sprite_dist:
        equ  >4000
 min_sprite_dist:
@@ -90,7 +92,6 @@ spchwt:
        equ  >9400
 spchrd:
        equ  >9000
-
 
 **
 * VDP memory map
@@ -340,20 +341,36 @@ zoom_1:
 prepare_to_start:
        .proc
        bl   @game_loop
+       li   r0,>3300 + max_hw_sprites + 1
+       bl   @vwtr
+       li   r0,sprite_attr_table+(max_hw_sprites*4)
+       li   r1,count_down_sprite_attrs
+       li   r2,4
+       bl   @vmbw
        li   r1,phrase_ready_to_start
        bl   @say_phrase
        li   r8,start_notes
        li   r9,4
 prepare_to_start_1:
+       li   r0,sprite_attr_table+(max_hw_sprites*4)+2
+       mov  r9,r1
+       dec  r1
+       ai   r1,>0020
+       swpb r1
+       bl   @vsbw
        mov  *r8+,r2
        bl   @start_sound
        mov  @w60,@frame_count
        bl   @wait
        dec  r9
        jne  prepare_to_start_1
+       li   r0,>3300 + max_hw_sprites
+       bl   @vwtr
        .endproc
 start_notes:
        data A1,A1,A1,A3
+count_down_sprite_attrs:
+       byte >18,>78,>23,>0e
 *// prepare_to_start
 
 *********************************************************************
@@ -1123,7 +1140,7 @@ vregs2:
        byte >24,bitmap_height              ; Bitmap height
        byte >31,>ea                        ; TL2, ROW30, ECM2 tiles + sprites, real y coord
        byte >32,>01                        ; TL2 not always on top
-       byte >33,>10                        ; Stop sprite
+       byte >33,max_hw_sprites             ; Stop sprite
        data -1
 *// graphics_mode
 
@@ -1195,10 +1212,6 @@ load_palette_loop:
        li   r1,S1_4
        li   r2,n_sprite_patterns*32
        bl   @vmbw
-*      Sprites off
-       li   r0,sprite_attr_table
-       li   r1,>f000
-       bl   @vsbw
 *      GPU program
        li   r0,gpu_program_tmp
        li   r1,gpu_prg_start
@@ -1375,7 +1388,7 @@ seconds_attrs:
        byte >00,>30,>20,>0e
        byte >00,>40,>20,>0e
 rank_attrs:
-       byte >00,>80,>26,>0e
+       byte >00,>78,>26,>0e
 lap_attrs:
        byte >00,>e0,>20,>0e
        byte >00,>f0,>20,>0e
