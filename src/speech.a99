@@ -838,5 +838,18 @@ phrase_round_completed:
        data sp_round,sp_completed,0
 phrase_last_round:
        data sp_last,sp_round,0
-phrase_course_completed:
-       data sp_course,sp_completed,0
+phrase_course_completed_as_number:
+       data sp_course,sp_completed,sp_as,sp_number
+phrase_course_completed_as_number_x:
+       data sp_one,0
+phrase_numbers:
+       data sp_0
+       data sp_1
+       data sp_2
+       data sp_3
+       data sp_4
+       data sp_5
+       data sp_6
+       data sp_7
+       data sp_8
+       data sp_9

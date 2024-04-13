@@ -174,8 +174,10 @@ frame_count:
        equ frame+2
 status:
        equ  frame_count+2
-x:                                     ; World x position (FP 8.8, unsigned, 0 <= x < 256)
+rank:
        equ  status+2
+x:                                     ; World x position (FP 8.8, unsigned, 0 <= x < 256)
+       equ  rank+2
 y:                                     ; World y position (FP 8.8, unsigned, 0 <= x < 128)
        equ  x+2
 dx:                                    ; Direction vector x (FP 8.8, signed, -1 <= dx <= 1)
@@ -254,6 +256,7 @@ main:
        bl   @one_time_init
        bl   @run_gpu                   ; Run GPU program, which moves it into high GPU RAM
 *      Init
+restart:
        li   r0,music
        bl   @play_module
        bl   @zoom
@@ -265,6 +268,8 @@ loop:
        bl   @game_loop
        mov  @status,r0
        jeq  loop
+*      The end
+       bl   @mute_sound
        li   r0,600
        mov  r0,@frame_count
        bl   @wait
@@ -336,6 +341,7 @@ zoom_1:
        li   r0,gpu_dy
        bl   @vsww
 *      loop
+       bl   @check_quit
        ai   r4,>0100
        ai   r3,->0010
        ci   r3,>0100
@@ -401,6 +407,7 @@ game_loop:
        bl   @engine_sound
        bl   @module_player
        bl   @speak
+       bl   @check_quit
        .endproc
 *// game_loop
 
@@ -766,7 +773,11 @@ collisions_2a:
        li   r1,phrase_last_round
        jmp  collisions_2c
 collisions_2b:
-       li   r1,phrase_course_completed
+       mov  @rank,r1
+       sla  r1,1
+       mov  @phrase_numbers(r1),r1
+       mov  r1,@phrase_course_completed_as_number_x
+       li   r1,phrase_course_completed_as_number
        inc  @status
 collisions_2c:
        bl   @say_phrase
@@ -926,6 +937,7 @@ display_rank_2:
        ai   r3,other_kart_size
        dec  r2
        jne  display_rank_1
+       mov  r1,@rank
 *      Display rank
        swpb r1
        ai   r1,>2000
@@ -1187,16 +1199,10 @@ init_vdp_ram:
        li   r2,64
        bl   @vsmw
 *      Load palette
-       li  r0,>2fc0                    ; Reg 47, DPM = 1, AUTO INC = 1
-       li  r1,PAL0
-       bl   @vwtr
-       li  r2,128                      ; 128 bytes for 64 colors
-load_palette_loop:
-       movb *r1+,*r15                  ; Every two bytes written to the VDP now go to the palette registers
-       dec  r2
-       jne  load_palette_loop
-       li   r0,>2f00                   ; Reg 47, DPM = 0, AUTO INC = 0
-       bl   @vwtr
+       clr  r0
+       li   r1,PAL0
+       li   r2,64                       ; 64 colors
+       bl   @set_palette
 *      Name table
        li   r0,name_table
        li   r1,MD0
@@ -1258,6 +1264,43 @@ load_palette_loop:
 
 ***************************************************************************
 *
+* Restore palette
+*
+restore_palette
+       .proc
+       clr  r0
+       li   r1,standard_palette
+       li   r2,16
+       bl   @set_palette
+       .endproc
+*// restore_palette
+
+********************************************************************************
+*
+* Set palette
+*
+* r0: Start palette index
+* r1: Source palette data
+* r2: Number of entries
+*
+set_palette:
+       .proc
+*      Load color palettes
+       ori  r0,>2fc0                   ; Reg 47, DPM = 1, AUTO INC = 1, start PR
+       bl   @vwtr
+*      Every two bytes written to the VDP now go to the palette registers.
+       sla   r2,1                      ; Each 12-bit palette entry requires 2 bytes
+set_palette_1:
+       movb *r1+,@vdpwd
+       dec  r2
+       jne  set_palette_1
+       li   r0,>2f00                   ; Reg 47, exit DMP
+       bl   @vwtr
+       .endproc
+*// set_palette
+
+***************************************************************************
+*
 * Check quit
 *
 check_quit:
@@ -1273,6 +1316,7 @@ check_quit:
 *      Quit
 quit   clr  @>83c4                     ; Reset user ISR address
        seto @>6000                     ; Select first ROM bank
+       bl   @restore_palette
        li   r0,>3280                   ; Reset F18A
        bl   @vwtr
        blwp @>0000
@@ -1460,7 +1504,7 @@ other_karts:
        data >8000                      ; angle
        data >6800                      ; x
        data >1000                      ; y
-       data >00b0                      ; speed
+       data >0098                      ; speed
        data >0100                      ; slack
        data >0000                      ; progress
 
@@ -1481,7 +1525,7 @@ other_karts:
        data >8000                      ; angle
        data >7200                      ; x
        data >1a00                      ; y
-       data >00a0                      ; speed
+       data >0090                      ; speed
        data ->0100                     ; slack
        data >0000                      ; progress
 
@@ -1504,6 +1548,24 @@ kart_patterns_center:
        data >1414,>1454
 kart_patterns_right:
        data >1814,>1c14
+
+standard_palette:
+       data >0000                      ; Black
+       data >0000                      ; Black
+       data >02C3                      ; Medium Green
+       data >05D6                      ; Light Green
+       data >054F                      ; Dark Blue
+       data >076F                      ; Light Blue
+       data >0D54                      ; Dark Red
+       data >04EF                      ; Cyan
+       data >0F54                      ; Medium Red
+       data >0F76                      ; Light Red
+       data >0DC3                      ; Dark Yellow
+       data >0ED6                      ; Light Yellow
+       data >02B2                      ; Dark Green
+       data >0C5C                      ; Magenta
+       data >0CCC                      ; Gray
+       data >0FFF                      ; White
 
 ***************************************************************************
 *
