@@ -51,10 +51,10 @@ max_sprite_dist:
        equ  >4000
 min_sprite_dist:
        equ  >0200
-n_other_carts:
+n_other_karts:
        equ  5
 n_laps:
-       equ  5
+       equ  1
 **
 * Car physics
 *
@@ -261,8 +261,6 @@ restart:
        bl   @play_module
        bl   @zoom
        bl   @init_level
-       bl   @display_time
-       bl   @display_lap
        bl   @prepare_to_start
 loop:
        bl   @game_loop
@@ -273,7 +271,7 @@ loop:
        li   r0,600
        mov  r0,@frame_count
        bl   @wait
-       b    @quit
+       jmp  restart
 
 *********************************************************************************
 *
@@ -294,12 +292,25 @@ run_gpu:
 *
 init_level:
        .proc
-       li   r0,init_data
+       li   r0,kart_data_init
        li   r1,x
-       li   r2,init_data_end-init_data
+       li   r2,kart_data_init_end-kart_data_init
        bl   @copy
+       li   r0,other_karts_init
+       li   r1,other_karts
+       li   r2,n_other_karts*other_kart_size
+       bl   @copy
+       li   r0,top_sprite_attrs_init
+       li   r1,top_sprite_attrs
+       li   r2,top_sprite_attrs_init_end-top_sprite_attrs_init
+       bl   @copy
+       clr  @status
+       clr  @laps
+       clr  @minutes
        bl   @calculate_dx_dy
        bl   @upload_gpu_data
+       bl   @display_time
+       bl   @display_lap
        li   r0,gpu_display_sprites
        seto r1
        bl   @vsww
@@ -312,6 +323,10 @@ init_level:
 *
 zoom:
        .proc
+*      Disabled sprites
+       li   r0,>3300
+       bl   @vwtr
+*      Init position
        li   r0,gpu_x
        li   r1,>8000
        bl   @vsww
@@ -346,6 +361,9 @@ zoom_1:
        ai   r3,->0010
        ci   r3,>0100
        jhe  zoom_1
+*      Enable sprites
+       li   r0,>3300 + max_hw_sprites
+       bl   @vwtr
        .endproc
 *// zoom
 
@@ -507,7 +525,7 @@ display_sprites_1:
        movb r1,*r15
 *      Markers for other karts
        li   r3,other_karts
-       li   r5,n_other_carts
+       li   r5,n_other_karts
 display_sprites_2:
        mov  *r3+,r2                    ; Angle
        mov  *r3+,r0                    ; x
@@ -797,7 +815,7 @@ collisions_4:
 move_other_karts:
        .proc
        li   r3,other_karts
-       li   r5,n_other_carts
+       li   r5,n_other_karts
 move_other_karts_1:
        mov  @other_kart_x(r3),r0       ; x
        mov  @other_kart_y(r3),r1       ; y
@@ -862,7 +880,7 @@ upload_gpu_data:
 *      Other karts
        li   r0,gpu_kart_sprites
        li   r1,other_karts
-       li   r2,n_other_carts
+       li   r2,n_other_karts
 upload_gpu_data_1:
        bl   @vwad
        mov  *r1+,r3                    ; Angle
@@ -926,8 +944,8 @@ display_lap:
 display_rank:
 *      Calculate rank
        mov  @laps,r0                   ; Player's progress
-       li   r1,n_other_carts+1         ; Calculated rank
-       li   r2,n_other_carts
+       li   r1,n_other_karts+1         ; Calculated rank
+       li   r2,n_other_karts
        li   r3,other_karts+other_kart_laps
 display_rank_1:
        c    r0,*r3                     ; Compare player's progress to other kart's progress
@@ -1452,7 +1470,7 @@ b_n_laps:
 w60:
        data 60
 
-init_data:
+kart_data_init:
        data >8000                      ; x
        data >1000                      ; y
        data >0000                      ; dx
@@ -1465,23 +1483,8 @@ init_data:
        data >0000                      ; reverse
        data max_power_road             ; max_power
        data max_reverse_road           ; max_reverse
-init_data_end:
+kart_data_init_end:
        equ  $
-
-top_sprite_attrs:
-       equ  $
-minutes_attrs:
-       byte >00,>00,>20,>0e
-       byte >00,>10,>20,>0e
-       byte >00,>20,>2a,>0e
-seconds_attrs:
-       byte >00,>30,>20,>0e
-       byte >00,>40,>20,>0e
-rank_attrs:
-       byte >00,>78,>26,>0e
-lap_attrs:
-       byte >00,>e0,>20,>0e
-       byte >00,>f0,>20,>0e
 
 other_kart_angle:
        equ  0
@@ -1500,7 +1503,7 @@ other_kart_checkpoints:
 other_kart_size:
        equ  12
 
-other_karts:
+other_karts_init:
        data >8000                      ; angle
        data >6800                      ; x
        data >1000                      ; y
@@ -1536,6 +1539,9 @@ other_karts:
        data ->00c0                     ; slack
        data >0000                      ; progress
 
+other_karts:
+       bss  n_other_karts*other_kart_size
+
 other_kart_sprites:
        data kart_back_sprite
        data kart_right_sprite
@@ -1548,6 +1554,34 @@ kart_patterns_center:
        data >1414,>1454
 kart_patterns_right:
        data >1814,>1c14
+
+top_sprite_attrs_init:
+       equ  $
+minutes_attrs_init:
+       byte >00,>00,>20,>0e
+       byte >00,>10,>20,>0e
+       byte >00,>20,>2a,>0e
+seconds_attrs_init:
+       byte >00,>30,>20,>0e
+       byte >00,>40,>20,>0e
+rank_attrs_init:
+       byte >00,>78,>26,>0e
+lap_attrs_init:
+       byte >00,>e0,>20,>0e
+       byte >00,>f0,>20,>0e
+top_sprite_attrs_init_end:
+       equ  $
+
+top_sprite_attrs:
+       bss top_sprite_attrs_init_end-top_sprite_attrs_init
+minutes_attrs:
+       equ  top_sprite_attrs+(minutes_attrs_init-top_sprite_attrs_init)
+seconds_attrs:
+       equ  top_sprite_attrs+(seconds_attrs_init-top_sprite_attrs_init)
+rank_attrs:
+       equ  top_sprite_attrs+(rank_attrs_init-top_sprite_attrs_init)
+lap_attrs:
+       equ  top_sprite_attrs+(lap_attrs_init-top_sprite_attrs_init)
 
 standard_palette:
        data >0000                      ; Black
