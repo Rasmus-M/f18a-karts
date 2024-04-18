@@ -1,0 +1,31 @@
+*********************************************************************************
+*
+* Data exchanged between CPU and GPU
+*
+gpu_x:
+       equ  gpu_data
+gpu_y:
+       equ  gpu_x+2
+gpu_dx:
+       equ  gpu_y+2
+gpu_dy:
+       equ  gpu_dx+2
+
+gpu_display_sprites:
+       equ  gpu_dy+2
+
+gpu_sprite_data:
+       equ  0
+gpu_sprite_x:
+       equ  2
+gpu_sprite_y:
+       equ  4
+gpu_sprite_size:
+       equ  6
+
+gpu_sprites:
+       equ  gpu_display_sprites+2
+gpu_kart_sprites:
+       equ  gpu_sprites
+gpu_other_sprites:
+       equ  gpu_kart_sprites+(n_other_karts*gpu_sprite_size)

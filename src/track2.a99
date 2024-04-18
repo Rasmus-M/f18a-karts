@@ -1,0 +1,87 @@
+***************************************************************************
+*
+* Track 2 data
+*
+       data track2_init
+       data track2_karts
+       data track2_sprites
+       data track2_bmp
+       data track2_props
+
+track2_init:
+       data >6000                      ; x
+       data >6a00                      ; y
+       data >0000                      ; dx
+       data >0000                      ; dy
+       data >0000                      ; vx
+       data >0000                      ; vy
+       data >0000                      ; angle
+       data >0000                      ; angular_velocity
+       data >0000                      ; power
+       data >0000                      ; reverse
+       data max_power_road             ; max_power
+       data max_reverse_road           ; max_reverse
+
+track2_karts:
+*      1
+       data >8000                      ; angle
+       data >6a00                      ; x
+       data >6a00                      ; y
+       data >0098                      ; speed
+       data >0100                      ; slack
+       data >0000                      ; progress
+*      2
+       data >8000                      ; angle
+       data >6a00                      ; x
+       data >7400                      ; y
+       data >0060                      ; speed
+       data >0080                      ; slack
+       data >0000                      ; progress
+*      3
+       data >8000                      ; angle
+       data >7400                      ; x
+       data >6a00                      ; y
+       data >0080                      ; speed
+       data >0000                      ; slack
+       data >0000                      ; progress
+*      4
+       data >8000                      ; angle
+       data >7400                      ; x
+       data >7400                      ; y
+       data >0090                      ; speed
+       data ->0100                     ; slack
+       data >0000                      ; progress
+*      5
+       data >0000                      ; angle
+       data >6000                      ; x
+       data >7400                      ; y
+       data >0070                      ; speed
+       data ->00c0                     ; slack
+       data >0000                      ; progress
+
+track2_sprites:
+       data barrel_sprite
+       data >8c00                      ; x
+       data >0a00                      ; y
+       data barrel_sprite
+       data >8c00                      ; x
+       data >1f00                      ; y
+       data tyres_sprite
+       data >3a00                      ; x
+       data >6900                      ; y
+       data tyres_sprite
+       data >4200                      ; x
+       data >6900                      ; y
+       data tyres_sprite
+       data >3a00                      ; x
+       data >7700                      ; y
+       data tyres_sprite
+       data >4200                      ; x
+       data >7700                      ; y
+       data 0
+
+track2_bmp:
+       bcopy "track2-bmp.bin"
+
+track2_props:
+       copy "track2-props.a99"

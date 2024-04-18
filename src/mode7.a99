@@ -172,8 +172,10 @@ frame:                                 ; Frame counter
        equ padvar
 frame_count:
        equ frame+2
-status:
+track_index:
        equ  frame_count+2
+status:
+       equ  track_index+2
 rank:
        equ  status+2
 x:                                     ; World x position (FP 8.8, unsigned, 0 <= x < 256)
@@ -243,6 +245,8 @@ vdp_copy_pad:
 pad_max:
        equ  vdp_copy_pad+22
 
+       copy "gpu-data-defs.a99"
+
 ********************************************************************************
 *
 * Main program
@@ -255,13 +259,14 @@ main:
        li   r15,vdpwd
        bl   @one_time_init
        bl   @run_gpu                   ; Run GPU program, which moves it into high GPU RAM
+       inc  @track_index
 *      Init
 restart:
+       bl   @init_level
+;       bl   @zoom
+       bl   @prepare_to_start
        li   r0,music
        bl   @play_module
-       bl   @zoom
-       bl   @init_level
-       bl   @prepare_to_start
 loop:
        bl   @game_loop
        mov  @status,r0
@@ -292,25 +297,59 @@ run_gpu:
 *
 init_level:
        .proc
-       li   r0,kart_data_init
-       li   r1,x
-       li   r2,kart_data_init_end-kart_data_init
+*      Current track pointers
+       mov  @track_index,r1
+       sla  r1,1
+       mov  @tracks(r1),r0
+       li   r1,current_track
+       li   r2,track_size
+*      Upload bitmap
        bl   @copy
-       li   r0,other_karts_init
+       li   r0,bitmap_src
+       mov  @current_track_bmp,r1
+       li   r2,>2000
+       bl   @vmbw
+*      Init data
+       mov   @current_track_init,r0
+       li   r1,x
+       li   r2,track_init_size
+       bl   @copy
+*      Other karts
+       mov  @current_track_karts,r0
        li   r1,other_karts
        li   r2,n_other_karts*other_kart_size
        bl   @copy
+*      Upload other sprites
+       li   r0,gpu_other_sprites
+       bl   @vwad
+       mov  @current_track_sprites,r1
+init_level_1:
+       mov  *r1,r2
+       jeq  init_level_3
+       li   r2,6
+init_level_2:
+       movb *r1+,*r15
+       dec  r2
+       jne  init_level_2
+       jmp  init_level_1
+init_level_3:
+       clr  *r15
+       clr  *r15
+*      Top sprite attributes
        li   r0,top_sprite_attrs_init
        li   r1,top_sprite_attrs
        li   r2,top_sprite_attrs_init_end-top_sprite_attrs_init
        bl   @copy
+*      Variables
        clr  @status
        clr  @laps
        clr  @minutes
+*      Init
        bl   @calculate_dx_dy
        bl   @upload_gpu_data
        bl   @display_time
        bl   @display_lap
+*      Enable GPU sprites
        li   r0,gpu_display_sprites
        seto r1
        bl   @vsww
@@ -323,18 +362,16 @@ init_level:
 *
 zoom:
        .proc
-*      Disabled sprites
+*      Disable sprites
        li   r0,>3300
        bl   @vwtr
-*      Init position
-       li   r0,gpu_x
-       li   r1,>8000
+*      Disable GPU sprites
+       li   r0,gpu_display_sprites
+       clr  r1
        bl   @vsww
-       li   r0,gpu_y
-       li   r1,>1000
-       bl   @vsww
+*      Zoom
        li   r3,>1100                   ; Scale
-       li   r4,>8000                   ; Angle
+       mov  @angle,r4                  ; Angle
 zoom_1:
        bl   @vsync
        mov  r4,@angle
@@ -364,6 +401,10 @@ zoom_1:
 *      Enable sprites
        li   r0,>3300 + max_hw_sprites
        bl   @vwtr
+*      Enable GPU sprites
+       li   r0,gpu_display_sprites
+       seto r1
+       bl   @vsww
        .endproc
 *// zoom
 
@@ -513,7 +554,7 @@ display_sprites_1:
        ai   r1,bitmap_src_top*256
        movb r1,*r15
        mov  @x,r1
-       ai   r1,->0c00
+       ai   r1,->0600
        movb r1,*r15
        mov  @angle,r1
        ai   r1,>1000                  ; Rotate 45 degrees
@@ -535,7 +576,7 @@ display_sprites_2:
        ai   r1,->0800
        ai   r1,bitmap_src_top*256
        movb r1,*r15
-       ai   r0,->0c00
+       ai   r0,->0600
        movb r0,*r15
        ai   r2,>1000                  ; Rotate 45 degrees
        srl  r2,5
@@ -1049,7 +1090,8 @@ get_map_pixel:
        movb r1,r2                      ; YYYYYYYY.XXXXXXXX
        sla  r2,1                       ; YYYYYYYX.XXXXXXX0
        srl  r2,3                       ; 000YYYYY.YYXXXXXX
-       movb @bmp(r2),r1                ; Get 2 source pixels
+       a    @current_track_bmp,r2
+       movb *r2,r1                     ; Get 2 source pixels
        andi r0,>0200
        jne  get_map_pixel_1
        srl  r1,4
@@ -1103,7 +1145,8 @@ get_map_properties:
        srl  r0,10                      ; 00000000.00XXXXXX
        soc  r0,r1                      ; 00000YYY.YYXXXXXX
        clr  r2
-       movb @props(r1),r2            ; >0000 - >4f00
+       a    @current_track_props,r1
+       movb *r1,r2                     ; >0000 - >4f00
        rt
 *// get_map_properties
 
@@ -1208,10 +1251,6 @@ init_vdp_ram:
        li   r2,>4000
        bl   @vsmw
 *      Bitmap
-       li   r0,bitmap_src
-       li   r1,bmp
-       li   r2,>2000
-       bl   @vmbw
        li   r0,bitmap_gap
        li   r1,>1100
        li   r2,64
@@ -1262,11 +1301,6 @@ init_vdp_ram:
        li   r0,gpu_program_tmp
        li   r1,gpu_prg_start
        li   r2,gpu_prg_end-gpu_prg_start
-       bl   @vmbw
-*      GPU data
-       li   r0,gpu_data
-       li   r1,gpu_data_start
-       li   r2,gpu_data_end-gpu_data_start
        bl   @vmbw
 *      Graphics data
        li   r0,graphics_data_1
@@ -1470,21 +1504,39 @@ b_n_laps:
 w60:
        data 60
 
-kart_data_init:
-       data >8000                      ; x
-       data >1000                      ; y
-       data >0000                      ; dx
-       data >0000                      ; dy
-       data >0000                      ; vx
-       data >0000                      ; vy
-       data >8000                      ; angle
-       data >0000                      ; angular_velocity
-       data >0000                      ; power
-       data >0000                      ; reverse
-       data max_power_road             ; max_power
-       data max_reverse_road           ; max_reverse
-kart_data_init_end:
+track_init:
+       equ  0
+track_karts:
+       equ  2
+track_sprites:
+       equ  4
+track_bmp:
+       equ  6
+track_props:
+       equ  8
+track_size:
+       equ  10
+
+track_init_size:
+       equ  24
+
+tracks:
+       data track1
+       data track2
+       data 0
+
+current_track:
        equ  $
+current_track_init:
+       data 0                          ; init
+current_track_karts:
+       data 0                          ; karts
+current_track_sprites:
+       data 0                          ; sprites
+current_track_bmp:
+       data 0                          ; bmp
+current_track_props:
+       data 0                          ; props
 
 other_kart_angle:
        equ  0
@@ -1502,42 +1554,6 @@ other_kart_checkpoints:
        equ  11
 other_kart_size:
        equ  12
-
-other_karts_init:
-       data >8000                      ; angle
-       data >6800                      ; x
-       data >1000                      ; y
-       data >0098                      ; speed
-       data >0100                      ; slack
-       data >0000                      ; progress
-
-       data >8000                      ; angle
-       data >6800                      ; x
-       data >1a00                      ; y
-       data >0060                      ; speed
-       data >0080                      ; slack
-       data >0000                      ; progress
-
-       data >8000                      ; angle
-       data >7200                      ; x
-       data >1000                      ; y
-       data >0080                      ; speed
-       data >0000                      ; slack
-       data >0000                      ; progress
-
-       data >8000                      ; angle
-       data >7200                      ; x
-       data >1a00                      ; y
-       data >0090                      ; speed
-       data ->0100                     ; slack
-       data >0000                      ; progress
-
-       data >8000                      ; angle
-       data >7c00                      ; x
-       data >1a00                      ; y
-       data >0070                      ; speed
-       data ->00c0                     ; slack
-       data >0000                      ; progress
 
 other_karts:
        bss  n_other_karts*other_kart_size
@@ -1606,16 +1622,9 @@ standard_palette:
 * Data includes
 *
        copy "data.a99"
-gpu_data_start:
-       copy "gpu-data.a99"
-gpu_data_end:
-       equ  $
-bmp:
-       bcopy "track1-bmp.bin"
-props:
-       copy "track1-props.a99"
-
        copy "sound-fx.a99"
+music:
+       copy "theme1-music.a99"
 
 gfx_data_1:
        data >1800,>2000                ; width in pixels (2 pixels per fat pixel), height in pixels
@@ -1650,8 +1659,10 @@ kart_right_sprite:
 tyres_sprite:
        equ  kart_right_sprite+132
 
-music:
-       copy "theme1-music.a99"
+track1:
+       copy "track1.a99"
+track2:
+       copy "track2.a99"
 
 upper_memory_max:
        equ  $
