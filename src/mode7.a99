@@ -54,7 +54,10 @@ min_sprite_dist:
 n_other_karts:
        equ  5
 n_laps:
-       equ  1
+       equ  5
+n_tracks:
+       equ  2
+
 **
 * Car physics
 *
@@ -259,11 +262,12 @@ main:
        li   r15,vdpwd
        bl   @one_time_init
        bl   @run_gpu                   ; Run GPU program, which moves it into high GPU RAM
-       inc  @track_index
-*      Init
-restart:
+*      New game
+       clr  @track_index
+*      Next track
+play_track:
        bl   @init_level
-;       bl   @zoom
+       bl   @zoom
        bl   @prepare_to_start
        li   r0,music
        bl   @play_module
@@ -271,12 +275,17 @@ loop:
        bl   @game_loop
        mov  @status,r0
        jeq  loop
-*      The end
+*      End of track
        bl   @mute_sound
-       li   r0,600
+       li   r0,300
        mov  r0,@frame_count
        bl   @wait
-       jmp  restart
+*      Next track
+       mov  @track_index,r0
+       inc  r0
+       andi r0,n_tracks-1
+       mov  r0,@track_index
+       jmp  play_track
 
 *********************************************************************************
 *
@@ -1521,8 +1530,8 @@ track_init_size:
        equ  24
 
 tracks:
-       data track1
        data track2
+       data track1
        data 0
 
 current_track:
