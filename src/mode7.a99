@@ -54,7 +54,7 @@ min_sprite_dist:
 n_other_karts:
        equ  5
 n_laps:
-       equ  5
+       equ  1
 n_tracks:
        equ  2
 
@@ -381,6 +381,18 @@ zoom:
 *      Zoom
        li   r3,>1100                   ; Scale
        mov  @angle,r4                  ; Angle
+*      x
+       mov  @x,r5
+       mov  @dx,r6
+       sla  r6,6
+       s    r6,r5
+       sra  r6,8
+*      y
+       mov  @y,r7
+       mov  @dy,r8
+       sla  r8,6
+       s    r8,r7
+       sra  r8,8
 zoom_1:
        bl   @vsync
        mov  r4,@angle
@@ -401,9 +413,19 @@ zoom_1:
        mov  r0,r1
        li   r0,gpu_dy
        bl   @vsww
+*      x
+       li   r0,gpu_x
+       mov  r5,r1
+       bl   @vsww
+       a    r6,r5
+*      y
+       li   r0,gpu_y
+       mov  r7,r1
+       bl   @vsww
+       a    r8,r7
 *      loop
        bl   @check_quit
-       ai   r4,>0100
+       ai   r4,>0000
        ai   r3,->0010
        ci   r3,>0100
        jhe  zoom_1
