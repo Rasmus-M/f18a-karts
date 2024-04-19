@@ -276,9 +276,15 @@ loop:
        mov  @status,r0
        jeq  loop
 *      End of track
-       bl   @mute_sound
-       li   r0,300
+       li   r0,120
        mov  r0,@frame_count
+end_loop:
+       bl   @game_loop
+       dec  @frame_count
+       jne  end_loop
+       li   r0,180
+       mov  r0,@frame_count
+       bl   @mute_sound
        bl   @wait
 *      Next track
        mov  @track_index,r0
@@ -425,8 +431,8 @@ zoom_1:
        a    r8,r7
 *      loop
        bl   @check_quit
-       ai   r4,>0000
-       ai   r3,->0010
+       ai   r4,>0000                   ; Change angle if you want
+       ai   r3,->0010                  ; Change scale
        ci   r3,>0100
        jhe  zoom_1
 *      Enable sprites
