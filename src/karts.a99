@@ -54,7 +54,7 @@ min_sprite_dist:
 n_other_karts:
        equ  5
 n_laps:
-       equ  1
+       equ  5
 n_tracks:
        equ  2
 
