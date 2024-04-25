@@ -834,6 +834,8 @@ phrase_ready_to_start:
        data sp_ready_to_start,0
 phrase_check:
        data sp_check,0
+phrase_check_point:
+       data sp_check,sp_point,0
 phrase_round_completed:
        data sp_round,sp_completed,0
 phrase_last_round:

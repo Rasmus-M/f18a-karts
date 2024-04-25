@@ -880,7 +880,9 @@ collisions_2c:
        jmp  collisions_4
 collisions_3:
        movb r3,@check_points
-       li   r1,phrase_check
+       andi r3,>0100
+       jne  collisions_4
+       li   r1,phrase_check_point
        bl   @say_phrase
 collisions_4:
        .endproc
