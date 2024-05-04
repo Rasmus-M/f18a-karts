@@ -44,7 +44,7 @@ bitmap_height:
 n_char_patterns:
        equ  16
 n_sprite_patterns:
-       equ  7
+       equ  8
 max_hw_sprites:
        equ  16
 max_sprite_dist:
@@ -215,8 +215,10 @@ throttle:                              ; User input, throttle pressed
        equ  steering+2
 brake:                                 ; User input, brake/reverse pressed
        equ  throttle+2
-laps:                                  ; Lap completed
+progress:
        equ  brake+2
+laps:                                  ; Lap completed
+       equ  progress+2
 check_points:                          ; Progress on current lap (0 - 6)
        equ  laps+1
 minutes:                               ; Minutes passed
@@ -261,12 +263,17 @@ main:
        li   r10,stack                  ; Setup stack pointer
        li   r15,vdpwd
        bl   @one_time_init
+       bl   @display_title_screen
+       li   r1,vregs2
+       bl   @graphics_mode
+       bl   @init_vdp_ram
        bl   @run_gpu                   ; Run GPU program, which moves it into high GPU RAM
 *      New game
        clr  @track_index
 *      Next track
 play_track:
        bl   @init_level
+       bl   @display_on
        bl   @zoom
        bl   @prepare_to_start
        li   r0,music
@@ -293,18 +300,47 @@ end_loop:
        mov  r0,@track_index
        jmp  play_track
 
-*********************************************************************************
+*********************************************************************
 *
-* Run GPU program
+* Display title screen
 *
-run_gpu:
+display_title_screen:
        .proc
-       li   r0,gpu_program_tmp/256+>3600
-       bl   @vwtr
-       li   r0,gpu_program_tmp%256+>3700
-       bl   @vwtr
+       li   r1,vregs1
+       bl   @graphics_mode
+*      Palette
+       clr  r0
+       li   r1,title_palette
+       li   r2,16
+       bl   @set_palette
+*      1st half
+       seto @>6008
+       li   r0,bitmap_base
+       li   r1,>6200
+       li   r2,>1e00
+       bl   @vmbw
+*      2nd half
+       seto @>600a
+       li   r0,bitmap_base+>1e00
+       li   r1,>6200
+       li   r2,>1e00
+       bl   @vmbw
+*      On
+       bl   @display_on
+*      Wait
+       li   r0,600
+       mov  r0,@frame_count
+display_title_screen_1:
+       bl   @vsync
+       li   r0,JOY_FI
+       bl   @check_key
+       jne  display_title_screen_2
+       bl   @check_quit
+       dec  @frame_count
+       jne  display_title_screen_1
+display_title_screen_2:
        .endproc
-*// run_gpu
+*// display_title_screen
 
 *********************************************************************
 *
@@ -564,9 +600,13 @@ display_sprites:
        neg  r0
 display_sprites_1:
        mov  r0,@skid
-       sla  r0,2
+       sla  r0,3
        ai   r0,kart_patterns_center
-*      Kart left sprite
+       mov  @progress,r1
+       srl  r1,7
+       andi r1,0004
+       a    r1,r0
+*      Left side of kart
        li   r1,>4e60
        mov  r1,*r15
        swpb r1
@@ -575,7 +615,7 @@ display_sprites_1:
        mov  r1,*r15
        swpb r1
        mov  r1,*r15
-*      Kart right sprite
+*      Right side of kart
        li   r1,>4e80
        mov  r1,*r15
        swpb r1
@@ -597,7 +637,7 @@ display_sprites_1:
        ai   r1,>1000                  ; Rotate 45 degrees
        srl  r1,5
        andi r1,>0300
-       ori  r1,>1008
+       ori  r1,>2c08
        movb r1,*r15
        swpb r1
        movb r1,*r15
@@ -619,7 +659,7 @@ display_sprites_2:
        srl  r2,5
        andi r2,>0300
        soc  r5,r2
-       ori  r2,>1008
+       ori  r2,>2c08
        movb r2,*r15
        swpb r2
        movb r2,*r15
@@ -693,7 +733,7 @@ user_input_5:
 
 *********************************************************************************
 *
-* Move
+* Move player's kart
 *
 move:
        .proc
@@ -776,6 +816,7 @@ move_9:
 *      Position
        a    @vx,@x                     ; x += vx
        a    @vy,@y                     ; y += vy
+       a    @speed,@progress
 *      Drag
        mov  @vx,r0                     ; vx *= drag
        li   r1,drag
@@ -1199,8 +1240,6 @@ one_time_init:
        mov  r0,@one
        bl   @clear_pad
        bl   @copy_code_to_pad
-       bl   @graphics_mode
-       bl   @init_vdp_ram
        .endproc
 *// one_time_init
 
@@ -1241,7 +1280,6 @@ copy_code_to_pad:
 *
 graphics_mode:
        .proc
-       li   r1,vregs2
 graphics_mode_1:
        mov  *r1+,r0
        jlt  graphics_mode_2
@@ -1251,22 +1289,33 @@ graphics_mode_1:
 graphics_mode_2:
        .endproc
 *      VDP registers
-vregs2:
+vregs1:
        byte >39,>1c                        ; Unlock F18A
        byte >39,>1c                        ; Unlock F18A
        byte >00,>00                        ; Graphics I mode
-       byte >01,>e1                        ; 16K, display on, interrupts enabled, 8x8 sprites, magnify
+       byte >01,>a1                        ; 16K, display off, interrupts enabled, 8x8 sprites, magnify
        byte >02,name_table/>400            ; Name table
        byte >03,tile_attr_table/>40        ; Tile attribute table
        byte >04,pattern_table/>800         ; Pattern table
        byte >05,sprite_attr_table/>80      ; Sprite attribute table
        byte >06,sprite_pattern_table/>800  ; Sprite pattern table
+       byte >07,>0d                        ; Backdrop color
+       byte >1d,>44                        ; 1K bytes between sprite + tile planes
+       byte >1f,>d0                        ; Bitmap enable, fat pixels
+       byte >20,bitmap_base/>40            ; Bitmap address
+       byte >21,>00                        ; Bitmap x
+       byte >22,>00                        ; Bitmap y
+       byte >23,>00                        ; Bitmap width
+       byte >24,>f0                        ; Bitmap height
+       byte >31,>6a                        ; TL2 off, ROW30, ECM2 tiles + sprites, real y coord
+       byte >33,>00                        ; Stop sprite
+       data -1
+vregs2:
+       byte >01,>a1                        ; 16K, display off, interrupts enabled, 8x8 sprites, magnify
        byte >07,>01                        ; Backdrop color
        byte >0a,name_table_2/>400          ; Name table 2
        byte >0b,tile_attr_table/>40        ; Tile attribute table 2
        byte >1a,>00                        ; TL2 vertical scroll offset
-       byte >1d,>44                        ; 1K bytes between sprite + tile planes
-       byte >1f,>d0                        ; Bitmap enable, fat pixels
        byte >20,bitmap_dst/>40             ; Bitmap address
        byte >21,>00                        ; Bitmap x
        byte >22,bitmap_top                 ; Bitmap y
@@ -1352,6 +1401,30 @@ init_vdp_ram:
        bl   @vmbw
        .endproc
 *// init_vdp_ram
+
+*********************************************************************************
+*
+* Turn display on
+*
+display_on:
+       .proc
+       li   r0,>01e1                            ; 16K, display on, interrupts enabled, 8x8 sprites, magnify
+       bl   @vwtr
+       .endproc
+*// display_on
+
+*********************************************************************************
+*
+* Run GPU program
+*
+run_gpu:
+       .proc
+       li   r0,gpu_program_tmp/256+>3600
+       bl   @vwtr
+       li   r0,gpu_program_tmp%256+>3700
+       bl   @vwtr
+       .endproc
+*// run_gpu
 
 ***************************************************************************
 *
@@ -1605,9 +1678,12 @@ other_kart_sprites:
 
 kart_patterns_left:
        data >1c54,>1854
+       data >1c54,>1854
 kart_patterns_center:
+       data >1014,>1054
        data >1414,>1454
 kart_patterns_right:
+       data >1814,>1c14
        data >1814,>1c14
 
 top_sprite_attrs_init:
@@ -1637,6 +1713,12 @@ rank_attrs:
        equ  top_sprite_attrs+(rank_attrs_init-top_sprite_attrs_init)
 lap_attrs:
        equ  top_sprite_attrs+(lap_attrs_init-top_sprite_attrs_init)
+
+title_palette:
+       DATA >0FC7,>09BC,>0CDD,>0569
+       DATA >0234,>0EA7,>0A78,>0B00
+       DATA >0D83,>0A96,>0495,>08A3
+       DATA >09C5,>0000,>09C3,>0BC4
 
 standard_palette:
        data >0000                      ; Black
